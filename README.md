@@ -1,1 +1,0 @@
-# cartografia_social_CEO
