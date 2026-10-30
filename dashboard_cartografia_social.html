@@ -1,0 +1,2441 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50/50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Cartografía Social & Gobernanza - CEO</title>
+
+    <!-- Google Fonts: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        ceo: {
+                            navy: '#0B132B',
+                            slate: '#1C2541',
+                            blue: '#0284C7',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'executive-sm': '0 1px 3px 0 rgba(11, 19, 43, 0.04), 0 1px 2px -1px rgba(11, 19, 43, 0.02)',
+                        'executive': '0 10px 25px -5px rgba(11, 19, 43, 0.05), 0 8px 10px -6px rgba(11, 19, 43, 0.02)',
+                        'glow': '0 0 20px rgba(2, 132, 199, 0.18)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #F1F5F9;
+            color: #172554;
+            font-size: 14px;
+            -webkit-font-smoothing: antialiased;
+        }
+        #prioritizationDashboard {
+            border-color: #E2E8F0;
+            border-radius: 18px;
+            box-shadow: 0 8px 30px rgba(30, 50, 81, 0.045);
+        }
+        #prioritizationDashboard .plot-shell,
+        #prioritizationDashboard .index-shell {
+            border: 1px solid #CBD5E1;
+            border-radius: 16px;
+            background: #FFFFFF;
+            box-shadow: 0 2px 8px rgba(30, 50, 81, 0.025);
+        }
+        #prioritizationDashboard .plot-shell {
+            background: #E9ECEF;
+            box-shadow: inset 0 2px 6px rgba(15, 23, 42, 0.04);
+        }
+        #mactorLabelLayer {
+            position: absolute;
+            inset: 0;
+            z-index: 4;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        #mactorLabelLayer .actor-label,
+        #mactorLabelLayer .quadrant-label,
+        #mactorLabelLayer .center-quadrant-badge {
+            position: absolute;
+            box-sizing: border-box;
+            background: rgba(255, 255, 255, 0.96);
+            color: #1E293B;
+            font: 12px/1.35 'Plus Jakarta Sans', sans-serif;
+            overflow-wrap: anywhere;
+            pointer-events: auto;
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        #mactorLabelLayer .actor-label {
+            max-width: 190px;
+            padding: 5px 9px 5px 11px;
+            border: 1px solid rgba(203, 213, 225, 0.9);
+            border-left-width: 4px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+        }
+        #mactorLabelLayer .actor-label:hover {
+            border-color: #0284C7;
+            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.18);
+            z-index: 5;
+        }
+        #mactorLabelLayer .actor-label-name {
+            display: inline-block;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        #mactorLabelLayer .actor-label-name:not(:last-child)::after {
+            content: ',\00a0';
+            color: #64748B;
+            font-weight: 400;
+            display: inline;
+        }
+        #mactorLabelLayer .actor-label-name:hover,
+        #mactorLabelLayer .actor-label-name.is-selected {
+            color: #0369A1;
+            font-weight: 700;
+        }
+        /* Habladores de cuadrante en esquinas */
+        #mactorLabelLayer .quadrant-label {
+            font-size: 11px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            white-space: nowrap;
+        }
+        /* Badges en la intersección central del eje */
+        #mactorLabelLayer .center-quadrant-badge {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            padding: 3px 7px;
+            border-radius: 6px;
+            border: 1.5px solid;
+            white-space: nowrap;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+            pointer-events: none;
+        }
+        #mactorLabelLayer .draggable-label-active {
+            cursor: grabbing;
+            z-index: 6;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
+        }
+        #mactorLabelLayer .actor-label-connectors {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+            pointer-events: none;
+        }
+        /* Badges estilizados para los ticks numéricos de los ejes (Eje X e Y) */
+        .axis-tick-badge {
+            position: absolute;
+            z-index: 3;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #FEF3C7;
+            border: 1px solid #FDE68A;
+            color: #1E293B;
+            font-size: 11px;
+            font-weight: 800;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            user-select: none;
+            white-space: nowrap;
+        }
+        .axis-tick-badge.x-badge {
+            background: #F1F5F9;
+            border: 1px solid #CBD5E1;
+            color: #1E293B;
+        }
+        #sideLegendContainer .actor-index-card {
+            transition: all 0.15s ease;
+        }
+        #sideLegendContainer .actor-index-card:hover {
+            border-color: #38BDF8;
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.12);
+        }
+        @media (max-width: 1023px) {
+            #prioritizationDashboard .plot-shell {
+                min-height: 560px;
+                height: 560px;
+            }
+        }
+        @media (max-width: 639px) {
+            #prioritizationDashboard .plot-shell {
+                min-height: 740px;
+                height: 740px;
+            }
+        }
+        @media (max-width: 639px) {
+            #prioritizationDashboard .plot-shell {
+                min-height: 740px;
+                height: 740px;
+            }
+            #prioritizationDashboard .plot-heading {
+                align-items: flex-start;
+            }
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #F1F5F9;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94A3B8;
+        }
+        
+        .js-plotly-plot .plotly .modebar {
+            top: 12px !important;
+            right: 16px !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(8px) !important;
+            border-radius: 10px !important;
+            border: 1px solid #E2E8F0 !important;
+            padding: 4px 6px !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+            z-index: 30 !important;
+        }
+        .js-plotly-plot .plotly .modebar-btn path {
+            fill: #64748B !important;
+        }
+        .js-plotly-plot .plotly .modebar-btn:hover path {
+            fill: #0284C7 !important;
+        }
+        .surface-card {
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px -1px rgba(15, 23, 42, 0.02);
+        }
+        .gradient-header {
+            background: linear-gradient(135deg, #0B132B 0%, #1C2541 65%, #0284C7 100%);
+        }
+
+        #executiveReport {
+            display: none;
+        }
+
+        @media print {
+            @page {
+                size: A4 landscape;
+                margin: 12mm;
+            }
+            body {
+                background-color: #FFFFFF !important;
+                color: #000000 !important;
+                font-size: 9pt !important;
+            }
+            body > header,
+            body > main,
+            body > footer,
+            #notificationToast {
+                display: none !important;
+            }
+            #executiveReport {
+                display: block !important;
+                width: 100%;
+            }
+            .report-page {
+                page-break-after: always;
+            }
+            .report-page:last-child {
+                page-break-after: auto;
+            }
+            .report-overview-grid {
+                display: grid;
+                grid-template-columns: minmax(0, 1.7fr) minmax(250px, 0.9fr);
+                gap: 8mm;
+                align-items: start;
+            }
+            .report-chart {
+                display: block;
+                width: 100%;
+                height: 82mm;
+                object-fit: contain;
+                border: 1px solid #E2E8F0;
+                border-radius: 3mm;
+                background: #FFFFFF;
+            }
+            .report-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 8pt;
+            }
+            .report-table th,
+            .report-table td {
+                padding: 1.7mm 2mm;
+                border-bottom: 0.25mm solid #E2E8F0;
+                text-align: left;
+            }
+            .report-table th {
+                color: #334155;
+                background: #F1F5F9 !important;
+            }
+            .report-appendix .report-table {
+                font-size: 7pt;
+            }
+            .report-appendix .report-table th,
+            .report-appendix .report-table td {
+                padding: 0.8mm 1.5mm;
+                line-height: 1.1;
+            }
+            .report-section,
+            .report-overview-grid,
+            .report-section li {
+                break-inside: avoid;
+            }
+            .report-pill {
+                display: inline-block;
+                border-radius: 99px;
+                padding: 1mm 2mm;
+                color: #0B132B;
+                background: #F1F5F9 !important;
+                font-size: 8pt;
+            }
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-ceo-blue selection:text-white">
+
+    <header class="gradient-header text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-3.5">
+                <div class="h-10 px-3 py-1 bg-white/10 rounded-lg border border-white/15 backdrop-blur-md flex items-center justify-center">
+                    <img src="CEO_Logotipo.jpg" alt="Logo CEO" class="h-7 w-auto object-contain brightness-0 invert" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'font-black text-lg text-white tracking-widest px-1\'>CEO</div>';">
+                </div>
+                <div class="h-7 w-px bg-white/20 hidden sm:block"></div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-extrabold tracking-wider uppercase px-2 py-0.5 rounded bg-sky-500/20 text-sky-200 border border-sky-400/20">Enterprise Analytics</span>
+                        <span class="text-xs text-slate-300 hidden md:inline">• Metodología LIPSOR MACTOR</span>
+                    </div>
+                    <h1 class="text-base sm:text-lg font-bold text-white tracking-tight leading-tight">
+                        Cartografía Social & Gobernanza Territorial
+                    </h1>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2.5 no-print">
+                <button onclick="clearCurrentSession()" class="text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-1.5 bg-white/10 hover:bg-white/15 px-3.5 py-2 rounded-lg border border-white/15 transition-all">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-sky-300"></i>
+                    <span>Reiniciar</span>
+                </button>
+                <button onclick="exportDataReport()" class="text-xs font-bold text-white flex items-center gap-1.5 bg-ceo-blue hover:bg-sky-600 px-3.5 py-2 rounded-lg transition-all shadow-sm">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">Informe Ejecutivo</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Notification Toast -->
+        <div id="notificationToast" class="hidden fixed bottom-6 right-6 z-50 max-w-sm bg-slate-900 text-white rounded-xl shadow-2xl p-4 border border-slate-700 transition-all flex items-start space-x-3">
+            <div id="notificationIcon" class="p-2 bg-ceo-blue/20 text-ceo-blue rounded-lg shrink-0">
+                <i data-lucide="info" class="w-4 h-4"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h5 id="notificationTitle" class="text-xs font-bold uppercase tracking-wider text-sky-400">Notificación</h5>
+                <p id="notificationMessage" class="text-xs text-slate-300 mt-0.5 leading-relaxed">Mensaje del sistema...</p>
+            </div>
+            <button onclick="closeNotification()" class="text-slate-400 hover:text-white p-1">
+                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+        </div>
+
+        <section class="surface-card rounded-xl p-5 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2 text-ceo-navy font-extrabold text-sm uppercase tracking-wide">
+                    <div class="p-1.5 bg-sky-50 rounded-lg text-ceo-blue border border-sky-100">
+                        <i data-lucide="map-pin" class="w-4 h-4"></i>
+                    </div>
+                    Selecciona el Corredor Sostenible
+                </div>
+                <span id="activeCorridorBadge" class="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                    Ningún corredor seleccionado
+                </span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button onclick="selectCorridor('Garrido, Berracal, Toldas y Hojas Anchas')" id="corridorBtn-1" class="corridor-card text-left p-4 rounded-xl border border-slate-200 bg-white hover:border-ceo-blue hover:shadow-executive transition-all group relative overflow-hidden">
+                    <div class="flex items-start justify-between">
+                        <div class="p-2.5 rounded-lg bg-slate-50 text-slate-500 group-hover:bg-sky-50 group-hover:text-ceo-blue transition-colors">
+                            <i data-lucide="trees" class="w-5 h-5"></i>
+                        </div>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-ceo-blue">Corredor 01</span>
+                    </div>
+                    <h3 class="text-xs font-bold text-slate-800 mt-3 group-hover:text-ceo-navy leading-snug">
+                        Garrido, Berracal, Toldas y Hojas Anchas
+                    </h3>
+                    <p class="text-[11px] text-slate-500 mt-1">Gestión socioambiental e industrial</p>
+                </button>
+
+                <button onclick="selectCorridor('La Laja - La Playa')" id="corridorBtn-2" class="corridor-card text-left p-4 rounded-xl border border-slate-200 bg-white hover:border-ceo-blue hover:shadow-executive transition-all group relative overflow-hidden">
+                    <div class="flex items-start justify-between">
+                        <div class="p-2.5 rounded-lg bg-slate-50 text-slate-500 group-hover:bg-sky-50 group-hover:text-ceo-blue transition-colors">
+                            <i data-lucide="factory" class="w-5 h-5"></i>
+                        </div>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-ceo-blue">Corredor 02</span>
+                    </div>
+                    <h3 class="text-xs font-bold text-slate-800 mt-3 group-hover:text-ceo-navy leading-snug">
+                        Corredor Sostenible La Laja - La Playa
+                    </h3>
+                    <p class="text-[11px] text-slate-500 mt-1">Núcleo empresarial y comunitario</p>
+                </button>
+
+                <button onclick="selectCorridor('La Hondita - San José')" id="corridorBtn-3" class="corridor-card text-left p-4 rounded-xl border border-slate-200 bg-white hover:border-ceo-blue hover:shadow-executive transition-all group relative overflow-hidden">
+                    <div class="flex items-start justify-between">
+                        <div class="p-2.5 rounded-lg bg-slate-50 text-slate-500 group-hover:bg-sky-50 group-hover:text-ceo-blue transition-colors">
+                            <i data-lucide="route" class="w-5 h-5"></i>
+                        </div>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-ceo-blue">Corredor 03</span>
+                    </div>
+                    <h3 class="text-xs font-bold text-slate-800 mt-3 group-hover:text-ceo-navy leading-snug">
+                        Corredor Sostenible La Hondita - San José
+                    </h3>
+                    <p class="text-[11px] text-slate-500 mt-1">Articulación territorial estratégica</p>
+                </button>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="surface-card rounded-xl p-4 flex items-center space-x-3.5 border-l-4 border-l-ceo-blue">
+                <div class="p-2.5 bg-sky-50 text-ceo-blue rounded-lg shrink-0 border border-sky-100">
+                    <i data-lucide="users" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Actores</p>
+                    <h3 class="text-2xl font-black text-slate-900 mt-0.5" id="kpiTotalActors">0</h3>
+                    <p class="text-[11px] text-slate-400 truncate">Mapeados en la matriz</p>
+                </div>
+            </div>
+
+            <div class="surface-card rounded-xl p-4 flex items-center space-x-3.5 border-l-4 border-l-amber-500">
+                <div class="p-2.5 bg-amber-50 text-amber-600 rounded-lg shrink-0 border border-amber-100">
+                    <i data-lucide="shield-alert" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Máx. Influencia</p>
+                    <h3 class="text-sm font-bold text-slate-900 truncate mt-0.5" id="kpiMaxInfluential">-</h3>
+                    <p class="text-[11px] text-amber-700 font-extrabold" id="kpiMaxInfluentialVal">Puntaje: 0</p>
+                </div>
+            </div>
+
+            <div class="surface-card rounded-xl p-4 flex items-center space-x-3.5 border-l-4 border-l-emerald-600">
+                <div class="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg shrink-0 border border-emerald-100">
+                    <i data-lucide="anchor" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Máx. Dependencia</p>
+                    <h3 class="text-sm font-bold text-slate-900 truncate mt-0.5" id="kpiMaxDependent">-</h3>
+                    <p class="text-[11px] text-emerald-700 font-extrabold" id="kpiMaxDependentVal">Puntaje: 0</p>
+                </div>
+            </div>
+
+            <div class="surface-card rounded-xl p-4 flex items-center space-x-3.5 border-l-4 border-l-ceo-navy">
+                <div class="p-2.5 bg-slate-100 text-ceo-navy rounded-lg shrink-0 border border-slate-200">
+                    <i data-lucide="crosshair" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Cruce de Ejes</p>
+                    <h3 class="text-base font-bold text-slate-900 mt-0.5" id="kpiMidpoint">— / —</h3>
+                    <p class="text-[11px] text-slate-400">Punto Medio (X / Y)</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="prioritizationDashboard" class="surface-card rounded-2xl p-5 space-y-4">
+            
+            <!-- Toolbar -->
+            <div class="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-slate-100">
+                <div>
+                    <h2 class="text-lg sm:text-xl font-bold text-ceo-navy flex items-center gap-2">
+                        <i data-lucide="scatter-chart" class="w-5 h-5 text-ceo-blue"></i>
+                        Priorización de grupos de interés
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-1 max-w-2xl">
+                        Identificamos y priorizamos nuestros grupos de interés según su nivel de influencia y dependencia
+                    </p>
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3 text-[10px] font-semibold text-slate-600" aria-label="Leyenda de cuadrantes">
+                        <span class="inline-flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-amber-500"></i>Alta influencia · Baja dependencia</span>
+                        <span class="inline-flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-emerald-600"></i>Alta influencia · Alta dependencia</span>
+                        <span class="inline-flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-sky-600"></i>Baja influencia · Baja dependencia</span>
+                        <span class="inline-flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-violet-600"></i>Baja influencia · Alta dependencia</span>
+                    </div>
+                </div>
+
+                <div class="plot-heading flex flex-wrap items-center gap-2.5 no-print">
+                    <div class="relative w-48 sm:w-56">
+                        <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                        <input type="text" id="chartSearchInput" onkeyup="highlightActorOnChartAndTable()" placeholder="Buscar actor..." class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-ceo-blue/30 focus:border-ceo-blue transition-all">
+                    </div>
+
+                    <!-- Botones de Control Z y Restablecer -->
+                    <button onclick="undoLastLabelMovement()" id="undoLabelBtn" disabled title="Deshacer movimiento (Ctrl+Z)" class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-ceo-navy hover:bg-slate-50 text-xs font-bold rounded-lg transition-all shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
+                        <span>Deshacer</span>
+                    </button>
+
+                    <button onclick="resetLabelPositions()" title="Restablecer gráfica a su estado inicial" class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-ceo-navy hover:bg-slate-50 text-xs font-bold rounded-lg transition-all shadow-2xs">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-slate-500"></i>
+                        <span>Restablecer Posiciones</span>
+                    </button>
+
+                    <!-- Botón de Descarga JPG Restaurado y Funcional -->
+                    <button onclick="downloadChartImage()" title="Descargar la gráfica en formato JPG HD" class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-ceo-navy hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-all shadow-2xs cursor-pointer">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        <span>Descargar JPG</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Plotly Chart + Redesigned Lateral Legend -->
+            <div class="grid grid-cols-1 gap-5 items-stretch">
+                
+                <!-- Chart Canvas Container -->
+                <div class="plot-shell relative min-h-[680px] h-[680px] overflow-hidden flex flex-col">
+                    <div id="mactorPlot" class="w-full h-full flex-1"></div>
+                    <div id="mactorLabelLayer" aria-label="Etiquetas de actores"></div>
+
+                    <!-- Empty State Overlay -->
+                    <div id="emptyChartOverlay" class="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 bg-slate-50/95 text-center space-y-3">
+                        <div class="w-16 h-16 rounded-2xl bg-sky-50 border border-sky-100 text-ceo-blue flex items-center justify-center shadow-2xs">
+                            <i data-lucide="scatter-chart" class="w-8 h-8"></i>
+                        </div>
+                        <div class="max-w-xs space-y-1">
+                            <h3 class="text-sm font-bold text-ceo-navy">Plano Cartesiano</h3>
+                            <p class="text-xs text-slate-500 leading-relaxed" id="emptyChartMessage">
+                                Selecciona un Corredor Sostenible para extraer y visualizar la matriz de actores.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Actor Hover / Selection Detail Panel -->
+                    <div id="actorDetailCard" class="hidden absolute top-3 right-3 z-20 max-w-xs w-full bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-lg rounded-xl p-3.5 transition-all no-print">
+                        <div class="flex justify-between items-start gap-2 mb-1.5">
+                            <span id="actorDetailQuadrantBadge" class="inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-200">
+                                Cuadrante I
+                            </span>
+                            <button onclick="closeActorDetailCard()" class="p-0.5 text-slate-400 hover:text-slate-600 rounded">
+                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+
+                        <h4 id="actorDetailName" class="text-xs font-bold text-ceo-navy leading-snug">Nombre Actor</h4>
+
+                        <div class="grid grid-cols-2 gap-2 my-2 text-center">
+                            <div class="p-1.5 bg-slate-50 rounded-lg border border-slate-100">
+                                <p class="text-[9px] uppercase font-black text-slate-400">Dependencia (X)</p>
+                                <p id="actorDetailX" class="text-xs font-black text-slate-800">0</p>
+                            </div>
+                            <div class="p-1.5 bg-slate-50 rounded-lg border border-slate-100">
+                                <p class="text-[9px] uppercase font-black text-slate-400">Influencia (Y)</p>
+                                <p id="actorDetailY" class="text-xs font-black text-slate-800">0</p>
+                            </div>
+                        </div>
+
+                        <p id="actorDetailDesc" class="text-[11px] text-slate-500 leading-relaxed bg-slate-50/80 p-2 rounded-lg border border-slate-100">
+                            Detalle de la posición táctica en la matriz.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="index-shell p-4 flex flex-col">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 shrink-0">
+                        <div class="flex items-center justify-between sm:justify-start gap-3">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="layers" class="w-4 h-4 text-ceo-blue"></i>
+                                <h3 class="text-xs font-extrabold text-ceo-navy uppercase tracking-wider">Índice de actores</h3>
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200" id="legendTotalCount">0 actores</span>
+                        </div>
+
+                        <!-- Segmented Control Filters estilo píldora -->
+                        <div class="inline-flex bg-slate-100 p-1 rounded-xl text-[10px] font-bold text-center no-print">
+                            <button onclick="filterQuadrant('all')" id="legendFilter-all" class="px-3 py-1.5 rounded-lg bg-ceo-navy text-white shadow-xs transition-all">Todos</button>
+                            <button onclick="filterQuadrant('Q1')" id="legendFilter-Q1" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-amber-800 transition-all">Q1</button>
+                            <button onclick="filterQuadrant('Q2')" id="legendFilter-Q2" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-emerald-800 transition-all">Q2</button>
+                            <button onclick="filterQuadrant('Q3')" id="legendFilter-Q3" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-sky-800 transition-all">Q3</button>
+                            <button onclick="filterQuadrant('Q4')" id="legendFilter-Q4" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-violet-800 transition-all">Q4</button>
+                        </div>
+                    </div>
+
+                    <!-- Layout en Cuadrícula Responsiva y Optimizada para el Índice -->
+                    <div id="sideLegendContainer" class="flex-1 overflow-y-auto custom-scrollbar pr-1 py-3 space-y-4 max-h-[380px]">
+                        <div class="text-center text-slate-400 text-xs py-12">
+                            Carga un corredor para explorar el índice.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section class="surface-card rounded-xl p-5 space-y-5">
+            <div class="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-slate-100">
+                <div>
+                    <h2 class="text-base font-bold text-ceo-navy flex items-center gap-2">
+                        <i data-lucide="brain-circuit" class="w-5 h-5 text-ceo-blue"></i>
+                        Análisis & Insights Estratégicos por Cuadrante
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        Lectura metodológica MACTOR para la gobernanza del corredor seleccionado y priorización de acciones.
+                    </p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Q1 -->
+                <div class="bg-amber-50/40 rounded-xl p-4 border border-amber-200/60 space-y-3 relative">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2.5 py-0.5 rounded bg-amber-100/80 text-amber-900 border border-amber-200 text-[10px] font-black uppercase tracking-wider">
+                            Cuadrante I
+                        </span>
+                        <span id="insightBadgeQ1" class="text-[11px] font-bold text-amber-800 bg-amber-100/50 px-2 py-0.5 rounded">
+                            0 Actores
+                        </span>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-xs font-bold text-amber-950">Alta Influencia / Baja Dependencia</h3>
+                        <p class="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                            Dinamizadores clave con alta autonomía directiva. Sus decisiones moldean el entorno con baja vulnerabilidad.
+                        </p>
+                    </div>
+
+                    <div class="space-y-1 bg-white/70 p-2.5 rounded-lg border border-amber-100">
+                        <h4 class="text-[10px] font-black text-amber-900 uppercase tracking-wide">Directriz Estratégica:</h4>
+                        <p class="text-[11px] text-slate-700 leading-relaxed">
+                            <strong>Involucramiento y Liderazgo:</strong> Vincular como co-patrocinadores de la gobernanza, alineando sus agendas corporativas.
+                        </p>
+                    </div>
+
+                    <div>
+                        <span class="text-[10px] font-bold text-amber-900 block mb-1 uppercase tracking-wider">Actores identificados:</span>
+                        <div id="insightActorsQ1" class="flex flex-wrap gap-1 text-xs text-amber-900 font-semibold">
+                            <span class="text-slate-400 font-normal italic text-[11px]">Ninguno en este corredor</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q2 -->
+                <div class="bg-emerald-50/40 rounded-xl p-4 border border-emerald-200/60 space-y-3 relative">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2.5 py-0.5 rounded bg-emerald-100/80 text-emerald-900 border border-emerald-200 text-[10px] font-black uppercase tracking-wider">
+                            Cuadrante II
+                        </span>
+                        <span id="insightBadgeQ2" class="text-[11px] font-bold text-emerald-800 bg-emerald-100/50 px-2 py-0.5 rounded">
+                            0 Actores
+                        </span>
+                    </div>
+
+                    <div>
+                        <h3 class="text-xs font-bold text-emerald-950">Alta Influencia / Alta Dependencia</h3>
+                        <p class="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                            Actores de alta inestabilidad estratégica; impulsan cambios significativos pero sufren alto impacto colectivo.
+                        </p>
+                    </div>
+
+                    <div class="space-y-1 bg-white/70 p-2.5 rounded-lg border border-emerald-100">
+                        <h4 class="text-[10px] font-black text-emerald-900 uppercase tracking-wide">Directriz Estratégica:</h4>
+                        <p class="text-[11px] text-slate-700 leading-relaxed">
+                            <strong>Alianzas y Negociación:</strong> Establecer mesas permanentes de concertación para viabilidad operativa.
+                        </p>
+                    </div>
+
+                    <div>
+                        <span class="text-[10px] font-bold text-emerald-900 block mb-1 uppercase tracking-wider">Actores identificados:</span>
+                        <div id="insightActorsQ2" class="flex flex-wrap gap-1 text-xs text-emerald-900 font-semibold">
+                            <span class="text-slate-400 font-normal italic text-[11px]">Ninguno en este corredor</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q3 -->
+                <div class="bg-sky-50/40 rounded-xl p-4 border border-sky-200/60 space-y-3 relative">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2.5 py-0.5 rounded bg-sky-100/80 text-sky-900 border border-sky-200 text-[10px] font-black uppercase tracking-wider">
+                            Cuadrante III
+                        </span>
+                        <span id="insightBadgeQ3" class="text-[11px] font-bold text-sky-800 bg-sky-100/50 px-2 py-0.5 rounded">
+                            0 Actores
+                        </span>
+                    </div>
+
+                    <div>
+                        <h3 class="text-xs font-bold text-sky-950">Baja Influencia / Baja Dependencia</h3>
+                        <p class="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                            Escasa interconexión directa. Operan con autonomía sin condicionar los resultados estratégicos globales.
+                        </p>
+                    </div>
+
+                    <div class="space-y-1 bg-white/70 p-2.5 rounded-lg border border-sky-100">
+                        <h4 class="text-[10px] font-black text-sky-900 uppercase tracking-wide">Directriz Estratégica:</h4>
+                        <p class="text-[11px] text-slate-700 leading-relaxed">
+                            <strong>Monitoreo e Información:</strong> Mantener canal informativo fluido y sinergias en proyectos puntuales.
+                        </p>
+                    </div>
+
+                    <div>
+                        <span class="text-[10px] font-bold text-sky-900 block mb-1 uppercase tracking-wider">Actores identificados:</span>
+                        <div id="insightActorsQ3" class="flex flex-wrap gap-1 text-xs text-sky-900 font-semibold">
+                            <span class="text-slate-400 font-normal italic text-[11px]">Ninguno en este corredor</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q4 -->
+                <div class="bg-violet-50/40 rounded-xl p-4 border border-violet-200/60 space-y-3 relative">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2.5 py-0.5 rounded bg-violet-100/80 text-violet-900 border border-violet-200 text-[10px] font-black uppercase tracking-wider">
+                            Cuadrante IV
+                        </span>
+                        <span id="insightBadgeQ4" class="text-[11px] font-bold text-violet-800 bg-violet-100/50 px-2 py-0.5 rounded">
+                            0 Actores
+                        </span>
+                    </div>
+
+                    <div>
+                        <h3 class="text-xs font-bold text-violet-950">Baja Influencia / Alta Dependencia</h3>
+                        <p class="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                            Grupos y organizaciones vulnerables. Absorben los impactos con un margen acotado de influencia directa.
+                        </p>
+                    </div>
+
+                    <div class="space-y-1 bg-white/70 p-2.5 rounded-lg border border-violet-100">
+                        <h4 class="text-[10px] font-black text-violet-900 uppercase tracking-wide">Directriz Estratégica:</h4>
+                        <p class="text-[11px] text-slate-700 leading-relaxed">
+                            <strong>Empoderamiento e Inclusión:</strong> Garantizar espacios participativos de escucha activa y mitigación social.
+                        </p>
+                    </div>
+
+                    <div>
+                        <span class="text-[10px] font-bold text-violet-900 block mb-1 uppercase tracking-wider">Actores identificados:</span>
+                        <div id="insightActorsQ4" class="flex flex-wrap gap-1 text-xs text-violet-900 font-semibold">
+                            <span class="text-slate-400 font-normal italic text-[11px]">Ninguno en este corredor</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="surface-card rounded-xl p-5 space-y-4">
+            <div class="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-slate-100">
+                <div>
+                    <h2 class="text-base font-bold text-ceo-navy flex items-center gap-2">
+                        <i data-lucide="table" class="w-5 h-5 text-ceo-blue"></i>
+                        Matriz Resumen de Actores del Ecosistema
+                    </h2>
+                    <p class="text-xs text-slate-500">Haz clic en cualquier fila para destacar el actor en el plano cartesiano</p>
+                </div>
+
+                <div class="flex items-center space-x-2 no-print">
+                    <button onclick="sortTable('initial')" class="text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-all">
+                        Orden Inicial
+                    </button>
+                    <button onclick="sortTable('influence')" class="text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-all">
+                        Por Influencia
+                    </button>
+                    <button onclick="sortTable('dependence')" class="text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-all">
+                        Por Dependencia
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto custom-scrollbar rounded-lg border border-slate-200 max-h-80">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-slate-50 text-slate-600 font-bold sticky top-0 z-10 uppercase text-[10px] tracking-wider border-b border-slate-200">
+                        <tr>
+                            <th class="py-3 px-4">Actor / Organización</th>
+                            <th class="py-3 px-4 text-center">Dependencia (Eje X)</th>
+                            <th class="py-3 px-4 text-center">Influencia (Eje Y)</th>
+                            <th class="py-3 px-4 text-center">Cuadrante Posicional</th>
+                            <th class="py-3 px-4 text-center no-print">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="actorsTableBody" class="divide-y divide-slate-100 font-medium">
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <article id="executiveReport" aria-label="Informe ejecutivo"></article>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-5 mt-10">
+        <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-slate-500">
+            <div class="flex items-center space-x-2">
+                <span class="font-bold text-ceo-navy">Corporación Empresarial del Oriente Antioqueño - CEO</span>
+                <span>•</span>
+                <span>Modelo de Gobernanza Territorial</span>
+            </div>
+            <div>
+                Metodología LIPSOR-MACTOR adaptada para Corredores Sostenibles
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        let currentActorsData = [];
+        let selectedCorridor = null;
+        let activeQuadrantFilter = 'all';
+        let selectedActorId = null;
+        const labelLayoutOverrides = new Map();
+        const labelMovementHistory = []; // Historial de movimientos para Control Z
+        let activeLabelDrag = null;
+
+        // Atajo de teclado para Ctrl + Z
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+                e.preventDefault();
+                undoLastLabelMovement();
+            }
+        });
+
+        function pushLabelMovementHistory(key, oldPos, newPos) {
+            labelMovementHistory.push({ key, oldPos, newPos });
+            updateUndoButtonState();
+        }
+
+        function undoLastLabelMovement() {
+            if (!labelMovementHistory.length) return;
+            const lastMove = labelMovementHistory.pop();
+            if (lastMove.oldPos) {
+                labelLayoutOverrides.set(lastMove.key, { ...lastMove.oldPos });
+            } else {
+                labelLayoutOverrides.delete(lastMove.key);
+            }
+            updateUndoButtonState();
+            scheduleActorLabelLayout();
+            showNotification('Movimiento Deshecho', 'Se ha revertido la posición anterior de la etiqueta.', 'info');
+        }
+
+        function resetLabelPositions() {
+            labelLayoutOverrides.clear();
+            labelMovementHistory.length = 0;
+            updateUndoButtonState();
+            scheduleActorLabelLayout();
+            showNotification('Posiciones Restablecidas', 'La gráfica ha vuelto a su diseño posicional inicial.', 'success');
+        }
+
+        function updateUndoButtonState() {
+            const btn = document.getElementById('undoLabelBtn');
+            if (btn) {
+                btn.disabled = labelMovementHistory.length === 0;
+            }
+        }
+
+        // =========================================================================
+        // CONFIGURACIÓN DE CONEXIÓN A GOOGLE DRIVE VÍA APPS SCRIPT
+        // =========================================================================
+        
+        // 1. URL de la implementación de tu Google Apps Script (Web App):
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyc70AMRw9abnN7QzH8Mq1sMNGG0GteJhtL8JNzdvO13AnzjePTF4BsFZ7TGK9-yiXb/exec'; 
+
+        // 2. IDs de Google Drive ya configurados automáticamente
+        const CORRIDOR_FILE_IDS = {
+            'Garrido, Berracal, Toldas y Hojas Anchas': '1v36FJHF2XL-5r_aljMxpHstR0nmZF8yZ',
+            'La Laja - La Playa': '1q6w-ZQyPJhuJGgUHMNP6VuE5vUYkqQHR',
+            'La Hondita - San José': '1gVuO2FgCxFJ3VxQO3DESKRqc481V7JUM'
+        };
+
+        function selectCorridor(corridorName) {
+            selectedCorridor = corridorName;
+            
+            const badge = document.getElementById('activeCorridorBadge');
+            badge.textContent = `Corredor: ${corridorName}`;
+            badge.className = "text-xs font-bold px-3 py-1 rounded-full bg-sky-100 text-ceo-blue border border-sky-200";
+
+            // Resetear estilos visuales de botones
+            document.querySelectorAll('.corridor-card').forEach((card) => {
+                card.classList.remove('border-ceo-blue', 'bg-sky-50/30', 'ring-1', 'ring-ceo-blue/20');
+            });
+
+            // Resaltar el botón seleccionado según el corredor elegido
+            if (corridorName.includes('Garrido')) {
+                document.getElementById('corridorBtn-1').classList.add('border-ceo-blue', 'bg-sky-50/30', 'ring-1', 'ring-ceo-blue/20');
+            } else if (corridorName.includes('La Laja')) {
+                document.getElementById('corridorBtn-2').classList.add('border-ceo-blue', 'bg-sky-50/30', 'ring-1', 'ring-ceo-blue/20');
+            } else if (corridorName.includes('La Hondita')) {
+                document.getElementById('corridorBtn-3').classList.add('border-ceo-blue', 'bg-sky-50/30', 'ring-1', 'ring-ceo-blue/20');
+            }
+
+            fetchAndProcessExcel(corridorName);
+        }
+
+        async function fetchAndProcessExcel(corridorName) {
+            const fileId = CORRIDOR_FILE_IDS[corridorName];
+            
+            // Verificación de configuración inicial
+            if (!fileId || !SCRIPT_URL || SCRIPT_URL.includes('URL_DE_TU_APPS_SCRIPT_AQUI') || fileId.includes('ID_DEL_EXCEL')) {
+                showNotification('Falta Configuración', 'Debes ingresar la URL de Apps Script y los IDs de Drive en el código.', 'alert');
+                clearChartData('No es posible generar la gráfica. Faltan los parámetros de conexión con Drive.');
+                return;
+            }
+
+            try {
+                showNotification('Conectando...', `Extrayendo datos de Drive para ${corridorName}`, 'info');
+                
+                const response = await fetch(`${SCRIPT_URL}?id=${fileId}`);
+                if (!response.ok) {
+                    throw new Error(`Error de red HTTP: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Si el Apps Script reporta un error (Ej: archivo borrado, ID incorrecto)
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // El Apps Script nos devuelve el Excel en Base64, la librería XLSX lo procesa nativamente
+                const workbook = XLSX.read(data.base64, { type: 'base64' });
+                const parsedData = processMactorWorkbook(workbook);
+                
+                if (parsedData && parsedData.length > 0) {
+                    loadActorsData(parsedData);
+                    showNotification('Datos Sincronizados', `Se importaron ${parsedData.length} actores exitosamente.`, 'success');
+                } else {
+                    throw new Error('Matriz vacía o formato inválido.');
+                }
+            } catch (error) {
+                console.error(`Error obteniendo el Excel (${fileId}):`, error);
+                
+                // Vaciamos la gráfica y mostramos mensaje de alerta al usuario
+                clearChartData('El dashboard no encuentra el archivo de datos en Drive o el formato es inválido. No es posible generar la gráfica.');
+                showNotification('Archivo no encontrado', 'No fue posible cargar los datos para este corredor.', 'alert');
+            }
+        }
+
+        function clearChartData(message = 'Selecciona un Corredor Sostenible para extraer y visualizar la matriz de actores.') {
+            currentActorsData = [];
+            selectedActorId = null;
+            activeQuadrantFilter = 'all';
+            labelLayoutOverrides.clear();
+            labelMovementHistory.length = 0;
+            updateUndoButtonState();
+            
+            document.getElementById('emptyChartMessage').textContent = message;
+            
+            document.getElementById('kpiTotalActors').textContent = '0';
+            document.getElementById('kpiMaxInfluential').textContent = '-';
+            document.getElementById('kpiMaxInfluentialVal').textContent = 'Puntaje: 0';
+            document.getElementById('kpiMaxDependent').textContent = '-';
+            document.getElementById('kpiMaxDependentVal').textContent = 'Puntaje: 0';
+            document.getElementById('kpiMidpoint').textContent = '— / —';
+
+            closeActorDetailCard();
+            renderPlotlyChart();
+            renderSideLegend();
+            renderTableData();
+            updateQuadrantAnalysis();
+        }
+
+        function loadActorsData(actors) {
+            currentActorsData = actors.map((a, i) => ({
+                id: a.id || (i + 1),
+                name: a.name,
+                dependence: a.dependence,
+                influence: a.influence
+            }));
+            selectedActorId = null;
+
+            document.getElementById('kpiTotalActors').textContent = currentActorsData.length;
+            const quadrantThresholds = getQuadrantThresholds(currentActorsData);
+            document.getElementById('kpiMidpoint').textContent =
+                `${Number(quadrantThresholds.dependence.toFixed(2))} / ${Number(quadrantThresholds.influence.toFixed(2))}`;
+
+            if (currentActorsData.length > 0) {
+                const maxInf = [...currentActorsData].sort((a, b) => b.influence - a.influence)[0];
+                const maxDep = [...currentActorsData].sort((a, b) => b.dependence - a.dependence)[0];
+
+                document.getElementById('kpiMaxInfluential').textContent = maxInf ? maxInf.name : '-';
+                document.getElementById('kpiMaxInfluentialVal').textContent = maxInf ? `Puntaje: ${maxInf.influence}` : 'Puntaje: 0';
+
+                document.getElementById('kpiMaxDependent').textContent = maxDep ? maxDep.name : '-';
+                document.getElementById('kpiMaxDependentVal').textContent = maxDep ? `Puntaje: ${maxDep.dependence}` : 'Puntaje: 0';
+            }
+
+            renderPlotlyChart();
+            renderSideLegend();
+            renderTableData();
+            updateQuadrantAnalysis();
+        }
+
+        function updateQuadrantAnalysis() {
+            const quadKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+            
+            quadKeys.forEach(qKey => {
+                const badgeEl = document.getElementById(`insightBadge${qKey}`);
+                const actorsEl = document.getElementById(`insightActors${qKey}`);
+                if (!badgeEl || !actorsEl) return;
+
+                const actorsInQ = currentActorsData.filter(a => getActorQuadrant(a) === qKey);
+                badgeEl.textContent = `${actorsInQ.length} Actores`;
+
+                if (actorsInQ.length === 0) {
+                    actorsEl.innerHTML = `<span class="text-slate-400 font-normal italic text-[11px]">Ninguno en este corredor</span>`;
+                } else {
+                    const qStyle = getQuadrantStyles(qKey);
+                    actorsEl.innerHTML = actorsInQ.map(a => 
+                        `<span class="px-2 py-0.5 rounded border bg-white shadow-2xs font-semibold text-slate-800 text-[11px] flex items-center gap-1" style="border-color:${qStyle.stroke}">` +
+                        `<span class="w-1.5 h-1.5 rounded-full inline-block" style="background-color:${qStyle.fill}"></span>` +
+                        `${a.name}` +
+                        `</span>`
+                    ).join('');
+                }
+            });
+        }
+
+        function clearCurrentSession() {
+            selectedCorridor = null;
+            
+            const badge = document.getElementById('activeCorridorBadge');
+            badge.textContent = 'Ningún corredor seleccionado';
+            badge.className = "text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200";
+
+            document.querySelectorAll('.corridor-card').forEach((card) => {
+                card.classList.remove('border-ceo-blue', 'bg-sky-50/30', 'ring-1', 'ring-ceo-blue/20');
+            });
+
+            clearChartData('Selecciona un Corredor Sostenible para extraer y visualizar la matriz de actores.');
+            showNotification('Reiniciado', 'Se ha restablecido la vista inicial.', 'info');
+        }
+
+        function getQuadrantThresholds(actors = currentActorsData) {
+            const maxDependence = actors.reduce((maximum, actor) =>
+                Math.max(maximum, actor.dependence), 0);
+            const maxInfluence = actors.reduce((maximum, actor) =>
+                Math.max(maximum, actor.influence), 0);
+            return {
+                dependence: maxDependence / 2,
+                influence: maxInfluence / 2,
+                maxDependence: maxDependence || 1,
+                maxInfluence: maxInfluence || 1
+            };
+        }
+
+        function getAxisTickStep(maximum) {
+            const roughStep = Math.max(maximum / 5, Number.EPSILON);
+            const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+            const normalized = roughStep / magnitude;
+            return (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude;
+        }
+
+        function getActorQuadrant(actor) {
+            const thresholds = getQuadrantThresholds();
+            if (actor.dependence < thresholds.dependence && actor.influence >= thresholds.influence) return 'Q1';
+            if (actor.dependence >= thresholds.dependence && actor.influence >= thresholds.influence) return 'Q2';
+            if (actor.dependence < thresholds.dependence && actor.influence < thresholds.influence) return 'Q3';
+            return 'Q4';
+        }
+
+        function getQuadrantStyles(q) {
+            switch(q) {
+                case 'Q1': 
+                    return { fill: '#D97706', stroke: '#F59E0B', bgLight: '#FEF3C7', text: '#92400E', name: 'CUADRANTE I', fullTitle: 'Cuadrante I', desc: 'Alta influencia, baja dependencia.' };
+                case 'Q2': 
+                    return { fill: '#059669', stroke: '#10B981', bgLight: '#D1FAE5', text: '#065F46', name: 'CUADRANTE II', fullTitle: 'Cuadrante II', desc: 'Alta influencia, alta dependencia.' };
+                case 'Q3': 
+                    return { fill: '#0284C7', stroke: '#38BDF8', bgLight: '#E0F2FE', text: '#0369A1', name: 'CUADRANTE III', fullTitle: 'Cuadrante III', desc: 'Baja influencia, baja dependencia.' };
+                case 'Q4': 
+                    return { fill: '#7C3AED', stroke: '#A78BFA', bgLight: '#F3E8FF', text: '#5B21B6', name: 'CUADRANTE IV', fullTitle: 'Cuadrante IV', desc: 'Baja influencia, alta dependencia.' };
+            }
+        }
+
+        function escapeHTML(value) {
+            return String(value).replace(/[&<>"']/g, character => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            })[character]);
+        }
+
+        let actorLabelResizeObserver = null;
+        let actorLabelLayoutFrame = null;
+        let actorLabelResizeTimer = null;
+
+        window.addEventListener('resize', () => {
+            if (actorLabelResizeTimer !== null) clearTimeout(actorLabelResizeTimer);
+            actorLabelResizeTimer = setTimeout(() => {
+                actorLabelResizeTimer = null;
+                scheduleActorLabelLayout();
+            }, 120);
+        });
+        document.fonts.ready.then(scheduleActorLabelLayout);
+        document.fonts.addEventListener('loadingdone', scheduleActorLabelLayout);
+
+        function scheduleActorLabelLayout() {
+            if (actorLabelLayoutFrame !== null) cancelAnimationFrame(actorLabelLayoutFrame);
+            actorLabelLayoutFrame = requestAnimationFrame(() => {
+                actorLabelLayoutFrame = null;
+                layoutActorLabels();
+            });
+        }
+
+        function clampLabelPosition(left, top, width, height, bounds) {
+            return {
+                left: Math.max(bounds.left, Math.min(bounds.right - width, left)),
+                top: Math.max(bounds.top, Math.min(bounds.bottom - height, top))
+            };
+        }
+
+        function savedLabelPosition(key, width, height, bounds) {
+            const position = labelLayoutOverrides.get(key);
+            if (!position) return null;
+            return clampLabelPosition(
+                bounds.left + position.x * Math.max(0, bounds.right - bounds.left - width),
+                bounds.top + position.y * Math.max(0, bounds.bottom - bounds.top - height),
+                width,
+                height,
+                bounds
+            );
+        }
+
+        function rememberLabelPosition(label, bounds) {
+            const maxLeft = Math.max(1, bounds.right - bounds.left - label.offsetWidth);
+            const maxTop = Math.max(1, bounds.bottom - bounds.top - label.offsetHeight);
+            labelLayoutOverrides.set(label.dataset.layoutKey, {
+                x: Math.max(0, Math.min(1, (parseFloat(label.style.left) - bounds.left) / maxLeft)),
+                y: Math.max(0, Math.min(1, (parseFloat(label.style.top) - bounds.top) / maxTop))
+            });
+        }
+
+        const labelLayer = document.getElementById('mactorLabelLayer');
+        labelLayer.addEventListener('pointerdown', event => {
+            if (event.button !== 0) return;
+            const label = event.target.closest('.actor-label, .quadrant-label');
+            if (!label) return;
+            event.preventDefault();
+            const actorLabel = event.target.closest('.actor-label-name');
+            activeLabelDrag = {
+                label,
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                left: parseFloat(label.style.left),
+                top: parseFloat(label.style.top),
+                actorId: actorLabel ? actorLabel.dataset.actorId : null,
+                moved: false
+            };
+            label.classList.add('draggable-label-active');
+        });
+
+        document.addEventListener('pointermove', event => {
+            const drag = activeLabelDrag;
+            if (!drag || event.pointerId !== drag.pointerId) return;
+            const dx = event.clientX - drag.startX;
+            const dy = event.clientY - drag.startY;
+            if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+            drag.moved = true;
+            const plot = document.getElementById('mactorPlot');
+            const xaxis = plot && plot._fullLayout && plot._fullLayout.xaxis;
+            const yaxis = plot && plot._fullLayout && plot._fullLayout.yaxis;
+            if (!xaxis || !yaxis) return;
+            const bounds = {
+                left: Math.ceil(xaxis._offset + 3),
+                right: Math.floor(xaxis._offset + xaxis._length - 3),
+                top: Math.ceil(yaxis._offset + 3),
+                bottom: Math.floor(yaxis._offset + yaxis._length - 3)
+            };
+            const next = clampLabelPosition(
+                drag.left + dx,
+                drag.top + dy,
+                drag.label.offsetWidth,
+                drag.label.offsetHeight,
+                bounds
+            );
+            drag.label.style.left = `${next.left}px`;
+            drag.label.style.top = `${next.top}px`;
+            if (drag.label.classList.contains('actor-label')) {
+                const idSet = new Set(drag.label.dataset.actorIds.split(','));
+                const actor = currentActorsData.find(item => idSet.has(String(item.id)));
+                const path = Array.from(labelLayer.querySelectorAll('.actor-label-connectors path'))
+                    .find(item => item.dataset.actorIds === drag.label.dataset.actorIds);
+                if (actor && path) {
+                    const anchor = {
+                        x: xaxis._offset + xaxis.d2p(actor.dependence),
+                        y: yaxis._offset + yaxis.d2p(actor.influence)
+                    };
+                    const rect = {
+                        left: next.left,
+                        top: next.top,
+                        right: next.left + drag.label.offsetWidth,
+                        bottom: next.top + drag.label.offsetHeight
+                    };
+                    const connector = labelConnector(anchor, rect);
+                    const points = [{ x: connector.x1, y: connector.y1 }, { x: connector.x2, y: connector.y2 }];
+                    path.setAttribute('d', `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`);
+                    path.dataset.points = JSON.stringify(points);
+                }
+            }
+        });
+
+        const finishLabelDrag = event => {
+            const drag = activeLabelDrag;
+            if (!drag || event.pointerId !== drag.pointerId) return;
+            activeLabelDrag = null;
+            drag.label.classList.remove('draggable-label-active');
+            if (drag.moved) {
+                const plot = document.getElementById('mactorPlot');
+                const xaxis = plot._fullLayout.xaxis;
+                const yaxis = plot._fullLayout.yaxis;
+                const bounds = {
+                    left: Math.ceil(xaxis._offset + 3),
+                    right: Math.floor(xaxis._offset + xaxis._length - 3),
+                    top: Math.ceil(yaxis._offset + 3),
+                    bottom: Math.floor(yaxis._offset + yaxis._length - 3)
+                };
+                
+                const key = drag.label.dataset.layoutKey;
+                const previousPos = labelLayoutOverrides.get(key) ? { ...labelLayoutOverrides.get(key) } : null;
+
+                rememberLabelPosition(drag.label, bounds);
+
+                const currentPos = labelLayoutOverrides.get(key) ? { ...labelLayoutOverrides.get(key) } : null;
+                pushLabelMovementHistory(key, previousPos, currentPos);
+
+                scheduleActorLabelLayout();
+            } else if (event.type !== 'pointercancel' && drag.label.classList.contains('actor-label')) {
+                const actorId = Number(drag.actorId || drag.label.dataset.actorIds.split(',')[0]);
+                if (Number.isFinite(actorId)) selectActor(actorId);
+            }
+        };
+        document.addEventListener('pointerup', finishLabelDrag);
+        document.addEventListener('pointercancel', finishLabelDrag);
+
+        function rectanglesOverlap(a, b, gap = 0) {
+            return a.left < b.right + gap && a.right + gap > b.left &&
+                a.top < b.bottom + gap && a.bottom + gap > b.top;
+        }
+
+        function lineIntersectsRectangle(x1, y1, x2, y2, rect) {
+            let t0 = 0;
+            let t1 = 1;
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const p = [-dx, dx, -dy, dy];
+            const q = [x1 - rect.left, rect.right - x1, y1 - rect.top, rect.bottom - y1];
+
+            for (let i = 0; i < 4; i++) {
+                if (p[i] === 0) {
+                    if (q[i] < 0) return false;
+                    continue;
+                }
+                const ratio = q[i] / p[i];
+                if (p[i] < 0) t0 = Math.max(t0, ratio);
+                else t1 = Math.min(t1, ratio);
+                if (t0 > t1) return false;
+            }
+            return true;
+        }
+
+        function lineSegmentsCross(a, b) {
+            const orientation = (p, q, r) =>
+                (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
+            const firstStart = { x: a.x1, y: a.y1 };
+            const firstEnd = { x: a.x2, y: a.y2 };
+            const secondStart = { x: b.x1, y: b.y1 };
+            const secondEnd = { x: b.x2, y: b.y2 };
+            const firstSide = orientation(firstStart, firstEnd, secondStart);
+            const secondSide = orientation(firstStart, firstEnd, secondEnd);
+            const thirdSide = orientation(secondStart, secondEnd, firstStart);
+            const fourthSide = orientation(secondStart, secondEnd, firstEnd);
+            return firstSide * secondSide < 0 && thirdSide * fourthSide < 0;
+        }
+
+        function closestPointOnRectangle(x, y, rect) {
+            // Encuentra el punto exacto en el perímetro/borde del rectángulo más cercano a (x, y)
+            const cx = Math.max(rect.left, Math.min(rect.right, x));
+            const cy = Math.max(rect.top, Math.min(rect.bottom, y));
+
+            // Si el punto de origen está fuera del rectángulo, proyectamos exactamente a la arista del borde
+            let edgeX = cx;
+            let edgeY = cy;
+
+            if (x < rect.left) edgeX = rect.left;
+            else if (x > rect.right) edgeX = rect.right;
+
+            if (y < rect.top) edgeY = rect.top;
+            else if (y > rect.bottom) edgeY = rect.bottom;
+
+            // Si está alineado en diagonal a una esquina, asegurar toque perfecto sobre el borde
+            const dx = x - cx;
+            const dy = y - cy;
+            if (dx !== 0 && dy !== 0) {
+                const angle = Math.atan2(dy, dx);
+                const halfW = (rect.right - rect.left) / 2;
+                const halfH = (rect.bottom - rect.top) / 2;
+                const rectCenterX = rect.left + halfW;
+                const rectCenterY = rect.top + halfH;
+                
+                const tan = Math.tan(angle);
+                if (Math.abs(tan) * halfW <= halfH) {
+                    edgeX = dx > 0 ? rect.right : rect.left;
+                    edgeY = rectCenterY + (dx > 0 ? halfW : -halfW) * tan;
+                } else {
+                    edgeY = dy > 0 ? rect.bottom : rect.top;
+                    edgeX = rectCenterX + (dy > 0 ? halfH : -halfH) / tan;
+                }
+            }
+
+            return { 
+                x: Math.max(rect.left, Math.min(rect.right, edgeX)), 
+                y: Math.max(rect.top, Math.min(rect.bottom, edgeY)) 
+            };
+        }
+
+        function labelConnector(anchor, rect) {
+            const end = closestPointOnRectangle(anchor.x, anchor.y, rect);
+            const dx = end.x - anchor.x;
+            const dy = end.y - anchor.y;
+            const length = Math.hypot(dx, dy) || 1;
+            const markerGap = 8; // Inicia exactamente en el borde exterior del punto circular
+            return {
+                x1: anchor.x + (dx / length) * markerGap,
+                y1: anchor.y + (dy / length) * markerGap,
+                x2: end.x,
+                y2: end.y
+            };
+        }
+
+        function routeActorConnector(anchor, rect, blockedRectangles, pointAnchors, ownPoint, plotBounds, existingPaths) {
+            const direct = labelConnector(anchor, rect);
+            const start = { x: direct.x1, y: direct.y1 };
+            const end = { x: direct.x2, y: direct.y2 };
+            
+            return [start, end];
+        }
+
+        function layoutActorLabels() {
+            const plot = document.getElementById('mactorPlot');
+            const layer = document.getElementById('mactorLabelLayer');
+            if (!plot || !layer || !plot._fullLayout || !currentActorsData.length) {
+                if (layer) layer.replaceChildren();
+                return;
+            }
+
+            const xaxis = plot._fullLayout.xaxis;
+            const yaxis = plot._fullLayout.yaxis;
+            const plotWidth = layer.clientWidth;
+            const plotHeight = layer.clientHeight;
+            const thresholds = getQuadrantThresholds();
+            const labelBounds = {
+                left: Math.ceil(xaxis._offset + 3),
+                right: Math.floor(xaxis._offset + xaxis._length - 3),
+                top: Math.ceil(yaxis._offset + 3),
+                bottom: Math.floor(yaxis._offset + yaxis._length - 3)
+            };
+            const plotBounds = {
+                left: Math.ceil(xaxis._offset + 3),
+                right: Math.floor(xaxis._offset + xaxis._length - 3),
+                top: Math.ceil(yaxis._offset + 3),
+                bottom: Math.floor(yaxis._offset + yaxis._length - 3)
+            };
+            const xMidpoint = xaxis._offset + xaxis.d2p(thresholds.dependence);
+            const yMidpoint = yaxis._offset + yaxis.d2p(thresholds.influence);
+
+            layer.replaceChildren();
+            const connectorSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            connectorSvg.setAttribute('class', 'actor-label-connectors');
+            connectorSvg.setAttribute('viewBox', `0 0 ${plotWidth} ${plotHeight}`);
+            connectorSvg.setAttribute('preserveAspectRatio', 'none');
+            layer.appendChild(connectorSvg);
+
+            // Habladores Unificados Únicos ubicados en la zona central de cada cuadrante
+            const quadrantSpecs = [
+                { quadrant: 'Q1', isLeft: true, isTop: true },
+                { quadrant: 'Q2', isLeft: false, isTop: true },
+                { quadrant: 'Q3', isLeft: true, isTop: false },
+                { quadrant: 'Q4', isLeft: false, isTop: false }
+            ];
+
+            quadrantSpecs.forEach(spec => {
+                const style = getQuadrantStyles(spec.quadrant);
+                const label = document.createElement('div');
+                label.className = 'quadrant-label';
+                label.dataset.layoutKey = `quadrant:${spec.quadrant}`;
+                
+                label.innerHTML = `
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style="background-color: ${style.fill}"></span>
+                        <span class="font-extrabold uppercase text-[11px] tracking-wider" style="color: ${style.text}">${style.name}:</span>
+                    </div>
+                    <span class="text-[10px] font-medium block mt-0.5" style="color: ${style.text}">${style.desc}</span>
+                `;
+
+                label.style.backgroundColor = style.bgLight;
+                label.style.borderColor = `${style.stroke}B0`;
+                layer.appendChild(label);
+
+                const width = label.offsetWidth;
+                const height = label.offsetHeight;
+
+                const savedPos = savedLabelPosition(label.dataset.layoutKey, width, height, labelBounds);
+
+                if (savedPos) {
+                    label.style.left = `${savedPos.left}px`;
+                    label.style.top = `${savedPos.top}px`;
+                } else {
+                    const centerGap = 24;
+
+                    const targetLeft = spec.isLeft 
+                        ? xMidpoint - width - centerGap 
+                        : xMidpoint + centerGap;
+
+                    const targetTop = spec.isTop 
+                        ? yMidpoint - height - centerGap 
+                        : yMidpoint + centerGap;
+
+                    const position = clampLabelPosition(
+                        targetLeft,
+                        targetTop,
+                        width,
+                        height,
+                        labelBounds
+                    );
+                    label.style.left = `${position.left}px`;
+                    label.style.top = `${position.top}px`;
+                }
+            });
+
+            // Ubicación y Renderizado de etiquetas de Actores con Bordes Redondeados
+            const groupsByPosition = new Map();
+            currentActorsData.forEach(actor => {
+                const key = `${actor.dependence}|${actor.influence}`;
+                if (!groupsByPosition.has(key)) groupsByPosition.set(key, []);
+                groupsByPosition.get(key).push(actor);
+            });
+
+            const groups = Array.from(groupsByPosition.values())
+                .filter(actors => activeQuadrantFilter === 'all' ||
+                    getActorQuadrant(actors[0]) === activeQuadrantFilter ||
+                    actors.some(actor => actor.id === selectedActorId))
+                .map(actors => {
+                    const actor = actors[0];
+                    const quadrant = getActorQuadrant(actor);
+                    const anchor = {
+                        x: xaxis._offset + xaxis.d2p(actor.dependence),
+                        y: yaxis._offset + yaxis.d2p(actor.influence)
+                    };
+                    const quadrantCenter = {
+                        x: xaxis._offset + xaxis.d2p(
+                            quadrant === 'Q1' || quadrant === 'Q3'
+                                ? thresholds.dependence / 2
+                                : (thresholds.dependence + thresholds.maxDependence) / 2
+                        ),
+                        y: yaxis._offset + yaxis.d2p(
+                            quadrant === 'Q1' || quadrant === 'Q2'
+                                ? (thresholds.influence + thresholds.maxInfluence) / 2
+                                : thresholds.influence / 2
+                        )
+                    };
+                    return {
+                        actors,
+                        quadrant,
+                        anchor,
+                        preferredCenter: {
+                            x: anchor.x + (quadrantCenter.x - anchor.x) * 0.42,
+                            y: anchor.y + (quadrantCenter.y - anchor.y) * 0.42
+                        },
+                        style: getQuadrantStyles(quadrant)
+                    };
+                });
+
+            groups.forEach(group => {
+                const label = document.createElement('div');
+                label.className = 'actor-label';
+                label.style.borderLeftColor = group.style.stroke;
+                label.style.width = group.actors.length > 1
+                    ? `${Math.min(240, Math.max(160, plotBounds.right - plotBounds.left - 16))}px`
+                    : 'max-content';
+                label.style.maxWidth = `${Math.min(260, Math.max(140, plotBounds.right - plotBounds.left - 16))}px`;
+                label.dataset.actorIds = group.actors.map(actor => actor.id).join(',');
+                label.dataset.layoutKey = `actor:${group.actors.map(actor => `${actor.id}:${actor.name}`).join('|')}@${group.actors[0].dependence}|${group.actors[0].influence}`;
+                label.title = group.actors.map(actor => actor.name).join(', ');
+                group.actors.forEach(actor => {
+                    const name = document.createElement('span');
+                    name.className = `actor-label-name${actor.id === selectedActorId ? ' is-selected' : ''}`;
+                    name.textContent = actor.name;
+                    name.dataset.actorId = actor.id;
+                    label.appendChild(name);
+                });
+                layer.appendChild(label);
+                group.label = label;
+                group.width = label.offsetWidth;
+                group.height = label.offsetHeight;
+            });
+
+            const fixedObstacles = Array.from(layer.querySelectorAll('.quadrant-label'))
+                .map(label => ({
+                    left: parseFloat(label.style.left) - 4,
+                    top: parseFloat(label.style.top) - 4,
+                    right: parseFloat(label.style.left) + label.offsetWidth + 4,
+                    bottom: parseFloat(label.style.top) + label.offsetHeight + 4
+                }));
+
+            const placed = [];
+            const gap = 10;
+
+            groups.forEach(group => {
+                group.manualPosition = savedLabelPosition(
+                    group.label.dataset.layoutKey,
+                    group.width,
+                    group.height,
+                    labelBounds
+                );
+            });
+
+            groups.sort((a, b) => Number(Boolean(b.manualPosition)) - Number(Boolean(a.manualPosition)));
+
+            groups.forEach(group => {
+                if (group.manualPosition) {
+                    group.rect = {
+                        left: group.manualPosition.left,
+                        top: group.manualPosition.top,
+                        right: group.manualPosition.left + group.width,
+                        bottom: group.manualPosition.top + group.height
+                    };
+                    group.label.style.left = `${group.rect.left}px`;
+                    group.label.style.top = `${group.rect.top}px`;
+                    placed.push(group);
+                    return;
+                }
+                group.placementBounds = plotBounds;
+                const candidates = [];
+                for (let radius = 0; radius <= Math.max(plotWidth, plotHeight); radius += 18) {
+                    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) {
+                        const centerX = group.preferredCenter.x + Math.cos(angle) * radius;
+                        const centerY = group.preferredCenter.y + Math.sin(angle) * radius;
+                        const rect = {
+                            left: centerX - group.width / 2,
+                            top: centerY - group.height / 2,
+                            right: centerX + group.width / 2,
+                            bottom: centerY + group.height / 2
+                        };
+                        if (rect.left < group.placementBounds.left || rect.right > group.placementBounds.right ||
+                            rect.top < group.placementBounds.top || rect.bottom > group.placementBounds.bottom) continue;
+
+                        const rectCollisions = placed.reduce((count, other) =>
+                            count + (rectanglesOverlap(rect, other.rect, gap) ? 1 : 0), 0);
+                        const fixedCollisions = fixedObstacles.reduce((count, obstacle) =>
+                            count + (rectanglesOverlap(rect, obstacle, 3) ? 1 : 0), 0);
+                        const distance = Math.hypot(
+                            centerX - group.preferredCenter.x,
+                            centerY - group.preferredCenter.y
+                        );
+                        candidates.push({
+                            rect,
+                            score: distance + rectCollisions * 100000 + fixedCollisions * 25000
+                        });
+                    }
+                }
+
+                candidates.sort((a, b) => a.score - b.score);
+                const best = candidates[0];
+                if (!best) {
+                    const fallbackBounds = group.placementBounds;
+                    group.rect = {
+                        left: Math.max(fallbackBounds.left, Math.min(fallbackBounds.right - group.width, group.preferredCenter.x - group.width / 2)),
+                        top: Math.max(fallbackBounds.top, Math.min(fallbackBounds.bottom - group.height, group.preferredCenter.y - group.height / 2)),
+                        right: 0,
+                        bottom: 0
+                    };
+                    group.rect.right = group.rect.left + group.width;
+                    group.rect.bottom = group.rect.top + group.height;
+                } else {
+                    group.rect = best.rect;
+                }
+                group.label.style.left = `${group.rect.left}px`;
+                group.label.style.top = `${group.rect.top}px`;
+                group.label.style.width = `${group.width}px`;
+                placed.push(group);
+            });
+
+            groups.forEach(group => {
+                // Obtener posición real exacta del DOM para conectar la línea al borde sin dejar huecos
+                const labelRect = group.label.getBoundingClientRect();
+                const layerRect = layer.getBoundingClientRect();
+                const actualRect = {
+                    left: labelRect.left - layerRect.left,
+                    top: labelRect.top - layerRect.top,
+                    right: labelRect.right - layerRect.left,
+                    bottom: labelRect.bottom - layerRect.top
+                };
+
+                const connector = labelConnector(group.anchor, actualRect);
+                group.route = [
+                    { x: connector.x1, y: connector.y1 },
+                    { x: connector.x2, y: connector.y2 }
+                ];
+
+                const connectorPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                connectorPath.setAttribute('d', `M ${group.route[0].x} ${group.route[0].y} L ${group.route[1].x} ${group.route[1].y}`);
+                connectorPath.setAttribute('fill', 'none');
+                connectorPath.setAttribute('stroke', group.style.stroke);
+                connectorPath.setAttribute('stroke-opacity', '0.85');
+                connectorPath.setAttribute('stroke-width', '1.5');
+                connectorPath.dataset.actorIds = group.actors.map(actor => actor.id).join(',');
+                connectorPath.dataset.points = JSON.stringify(group.route);
+                connectorSvg.appendChild(connectorPath);
+            });
+        }
+
+        function renderPlotlyChart() {
+            const overlay = document.getElementById('emptyChartOverlay');
+
+            if (!currentActorsData || currentActorsData.length === 0) {
+                overlay.classList.remove('hidden');
+                Plotly.purge('mactorPlot');
+                document.getElementById('mactorLabelLayer').replaceChildren();
+                return;
+            } else {
+                overlay.classList.add('hidden');
+            }
+
+            const labelsByPosition = new Map();
+            currentActorsData.forEach(actor => {
+                const positionKey = `${actor.dependence}|${actor.influence}`;
+                if (!labelsByPosition.has(positionKey)) labelsByPosition.set(positionKey, []);
+                labelsByPosition.get(positionKey).push(actor);
+            });
+            const plotGroups = Array.from(labelsByPosition.values()).map(actors => ({
+                actors,
+                actor: actors[0]
+            }));
+            const scatterX = plotGroups.map(group => group.actor.dependence);
+            const scatterY = plotGroups.map(group => group.actor.influence);
+            const scatterHoverText = plotGroups.map(group => {
+                const actor = group.actor;
+                const qStyle = getQuadrantStyles(getActorQuadrant(actor));
+                return `<b>${group.actors.map(item => escapeHTML(item.name)).join('<br>')}</b><br>` +
+                    `<span style="color: #CBD5E1;">${qStyle.fullTitle}</span><br>` +
+                    `Dependencia (X): <b>${actor.dependence}</b><br>` +
+                    `Influencia (Y): <b>${actor.influence}</b>`;
+            });
+            const markerColors = plotGroups.map(group => getQuadrantStyles(getActorQuadrant(group.actor)).fill);
+            const markerLineColors = plotGroups.map(group =>
+                group.actors.some(actor => actor.id === selectedActorId) ? '#0B132B' : '#FFFFFF'
+            );
+            const markerSizes = plotGroups.map(group =>
+                group.actors.some(actor => actor.id === selectedActorId) ? 18 : 13
+            );
+            const markerOpacities = plotGroups.map(group =>
+                activeQuadrantFilter === 'all' || activeQuadrantFilter === getActorQuadrant(group.actor) ? 0.94 : 0.22
+            );
+
+            const tracePoints = {
+                x: scatterX,
+                y: scatterY,
+                mode: 'markers',
+                type: 'scatter',
+                cliponaxis: false,
+                hoverinfo: 'text',
+                hovertext: scatterHoverText,
+                customdata: plotGroups.map(group => group.actors.map(actor => actor.id)),
+                marker: {
+                    size: markerSizes,
+                    color: markerColors,
+                    line: {
+                        color: markerLineColors,
+                        width: 2
+                    },
+                    opacity: markerOpacities
+                }
+            };
+
+            const thresholds = getQuadrantThresholds();
+            const xMid = thresholds.dependence || 33;
+            const yMid = thresholds.influence || 9;
+            const maxXBound = Math.max(64, (thresholds.maxDependence || 60) * 1.02);
+            const maxYBound = Math.max(16, (thresholds.maxInfluence || 15) * 1.02);
+
+            // Escalas fijas según instrucción explícita
+            const tickValsX = [0, 20, 40, 60];
+            const tickValsY = [0, 5, 10, 15];
+
+            // Ejes y cortes de cuadrante (33 y 9) como líneas de fondo (layer: 'below')
+            const backgroundShapes = [
+                { type: 'line', x0: xMid, y0: 0, x1: xMid, y1: maxYBound, line: { color: '#94A3B8', width: 1.5, dash: 'dash' }, layer: 'below' },
+                { type: 'line', x0: 0, y0: yMid, x1: maxXBound, y1: yMid, line: { color: '#94A3B8', width: 1.5, dash: 'dash' }, layer: 'below' },
+                { type: 'line', x0: 0, y0: 0, x1: 0, y1: maxYBound, line: { color: '#1E293B', width: 2 }, layer: 'below' },
+                { type: 'line', x0: 0, y0: 0, x1: maxXBound, y1: 0, line: { color: '#1E293B', width: 2 }, layer: 'below' }
+            ];
+
+            const layout = {
+                autosize: true,
+                margin: { l: 75, r: 35, t: 35, b: 75 }, 
+                showlegend: false,
+                paper_bgcolor: '#E9ECEF',
+                plot_bgcolor: '#E9ECEF',
+                font: {
+                    family: '"Plus Jakarta Sans", system-ui, -apple-system, sans-serif',
+                    color: '#1E293B'
+                },
+                hoverlabel: {
+                    bgcolor: '#13243A',
+                    bordercolor: '#38BDF8',
+                    font: { family: '"Plus Jakarta Sans", sans-serif', size: 13, color: '#FFFFFF' }
+                },
+                xaxis: {
+                    title: { text: 'DEPENDENCIA', font: { family: '"Plus Jakarta Sans", sans-serif', size: 12, color: '#1E293B', weight: 800 }, standoff: 20 },
+                    range: [-2.5, maxXBound],
+                    fixedrange: true,
+                    zeroline: false,
+                    showline: false,
+                    showgrid: false,
+                    tickmode: 'array',
+                    tickvals: tickValsX,
+                    ticktext: ['0', '20', '40', '60'],
+                    showticklabels: true,
+                    ticks: '',
+                    ticklabelpad: 18,
+                    automargin: false,
+                    tickfont: { family: '"Plus Jakarta Sans", sans-serif', size: 11, color: '#334155', weight: 700 }
+                },
+                yaxis: {
+                    title: { text: 'INFLUENCIA', font: { family: '"Plus Jakarta Sans", sans-serif', size: 12, color: '#1E293B', weight: 800 }, standoff: 20 },
+                    range: [-0.6, maxYBound],
+                    fixedrange: true,
+                    zeroline: false,
+                    showline: false,
+                    showgrid: false,
+                    tickmode: 'array',
+                    tickvals: tickValsY,
+                    ticktext: ['0', '5', '10', '15'],
+                    showticklabels: true,
+                    ticks: '',
+                    ticklabelpad: 18,
+                    automargin: false,
+                    tickfont: { family: '"Plus Jakarta Sans", sans-serif', size: 11, color: '#334155', weight: 700 }
+                },
+                shapes: backgroundShapes,
+                annotations: []
+            };
+            
+            const config = {
+                responsive: true,
+                displayModeBar: false
+            };
+
+            const plot = document.getElementById('mactorPlot');
+            if (!actorLabelResizeObserver) {
+                actorLabelResizeObserver = new ResizeObserver(scheduleActorLabelLayout);
+                actorLabelResizeObserver.observe(document.querySelector('#prioritizationDashboard .plot-shell'));
+                actorLabelResizeObserver.observe(document.getElementById('mactorLabelLayer'));
+            }
+
+            Plotly.newPlot(plot, [tracePoints], layout, config).then(graph => {
+                if (!graph._actorLabelsAfterPlotBound) {
+                    graph.on('plotly_afterplot', scheduleActorLabelLayout);
+                    graph.on('plotly_relayout', scheduleActorLabelLayout);
+                    graph._actorLabelsAfterPlotBound = true;
+                }
+                if (graph._actorClickHandler) {
+                    graph.removeListener('plotly_click', graph._actorClickHandler);
+                }
+                graph._actorClickHandler = function(dataClick) {
+                    if (dataClick.points.length > 0) {
+                        selectActor(dataClick.points[0].customdata[0]);
+                    }
+                };
+                graph.on('plotly_click', graph._actorClickHandler);
+                scheduleActorLabelLayout();
+            });
+        }
+
+        function renderSideLegend() {
+            const container = document.getElementById('sideLegendContainer');
+            const totalCountBadge = document.getElementById('legendTotalCount');
+            if (!container || !totalCountBadge) return;
+            container.innerHTML = '';
+
+            if (!currentActorsData || currentActorsData.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-slate-400 text-xs py-12">
+                        <i data-lucide="inbox" class="w-7 h-7 mx-auto text-slate-300 mb-1.5"></i>
+                        No hay actores registrados.
+                    </div>
+                `;
+                totalCountBadge.textContent = '0 actores';
+                if (window.lucide) lucide.createIcons();
+                return;
+            }
+
+            let filtered = currentActorsData;
+            if (activeQuadrantFilter !== 'all') {
+                filtered = currentActorsData.filter(a => getActorQuadrant(a) === activeQuadrantFilter);
+            }
+
+            totalCountBadge.textContent = `${currentActorsData.length} actores`;
+
+            const quadrantsOrder = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+            quadrantsOrder.forEach(qKey => {
+                const actorsInQ = filtered.filter(a => getActorQuadrant(a) === qKey);
+                if (actorsInQ.length === 0) return;
+
+                const qStyle = getQuadrantStyles(qKey);
+
+                const groupHeader = document.createElement('div');
+                groupHeader.className = "flex items-center justify-between text-[11px] font-extrabold tracking-wide pt-2 pb-1 text-slate-700 border-b border-slate-200/80 mb-2";
+                groupHeader.innerHTML = `
+                    <span class="flex items-center gap-2" style="color: ${qStyle.text}">
+                        <span class="w-1.5 h-3.5 rounded-full" style="background-color: ${qStyle.fill}"></span>
+                        ${qStyle.fullTitle}
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded-full">${actorsInQ.length} actores</span>
+                `;
+                container.appendChild(groupHeader);
+
+                const listGrid = document.createElement('div');
+                listGrid.className = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 mb-3";
+
+                actorsInQ.forEach(actor => {
+                    const isSelected = selectedActorId === actor.id;
+                    const item = document.createElement('div');
+                    item.id = `legend-item-${actor.id}`;
+                    item.className = `actor-index-card p-2.5 rounded-lg border bg-white flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                        isSelected 
+                            ? 'bg-sky-50 text-ceo-navy font-bold border-ceo-blue ring-1 ring-sky-300/50 shadow-xs' 
+                            : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50/80'
+                    }`;
+
+                    item.innerHTML = `
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${qStyle.fill}"></span>
+                            <span class="text-xs truncate" title="${escapeHTML(actor.name)}">${escapeHTML(actor.name)}</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-mono shrink-0">
+                            (${actor.dependence}, ${actor.influence})
+                        </div>
+                    `;
+                    item.onclick = () => selectActor(actor.id);
+                    listGrid.appendChild(item);
+                });
+                container.appendChild(listGrid);
+            });
+
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function selectActor(actorId) {
+            selectedActorId = selectedActorId === actorId ? null : actorId;
+            const actor = currentActorsData.find(a => a.id === actorId);
+            const card = document.getElementById('actorDetailCard');
+            
+            if (actor && selectedActorId && card) {
+                const quadrant = getActorQuadrant(actor);
+                const qStyle = getQuadrantStyles(quadrant);
+                
+                const badge = document.getElementById('actorDetailQuadrantBadge');
+                if (badge) {
+                    badge.textContent = qStyle.fullTitle;
+                    badge.style.backgroundColor = qStyle.bgLight;
+                    badge.style.color = qStyle.text;
+                    badge.style.borderColor = `${qStyle.stroke}88`;
+                }
+                
+                document.getElementById('actorDetailName').textContent = actor.name;
+                document.getElementById('actorDetailX').textContent = actor.dependence;
+                document.getElementById('actorDetailY').textContent = actor.influence;
+                document.getElementById('actorDetailDesc').textContent = `Posicionado en el ${qStyle.fullTitle} (${qStyle.desc}) con dependencia ${actor.dependence} e influencia ${actor.influence}.`;
+                
+                card.classList.remove('hidden');
+            } else if (card) {
+                card.classList.add('hidden');
+            }
+            
+            renderPlotlyChart();
+            renderSideLegend();
+            renderTableData();
+        }
+
+        function renderTableData() {
+            const tbody = document.getElementById('actorsTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            if (!currentActorsData || currentActorsData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-8 text-center text-slate-400 italic">
+                            No hay datos de actores disponibles.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            let filtered = currentActorsData;
+            if (activeQuadrantFilter !== 'all') {
+                filtered = currentActorsData.filter(a => getActorQuadrant(a) === activeQuadrantFilter);
+            }
+
+            filtered.forEach(actor => {
+                const quadrant = getActorQuadrant(actor);
+                const qStyle = getQuadrantStyles(quadrant);
+                const isSelected = selectedActorId === actor.id;
+
+                const row = document.createElement('tr');
+                row.id = `row-actor-${actor.id}`;
+                row.className = `hover:bg-slate-50 transition-colors cursor-pointer ${isSelected ? 'bg-sky-50/80 font-bold' : ''}`;
+                row.onclick = () => selectActor(actor.id);
+
+                row.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-slate-800">${escapeHTML(actor.name)}</td>
+                    <td class="py-3 px-4 text-center font-mono text-slate-600">${actor.dependence}</td>
+                    <td class="py-3 px-4 text-center font-mono text-slate-600">${actor.influence}</td>
+                    <td class="py-3 px-4 text-center">
+                        <span class="inline-block px-2.5 py-0.5 rounded text-[10px] font-black uppercase" style="background-color: ${qStyle.bgLight}; color: ${qStyle.text}; border: 1px solid ${qStyle.stroke}88">
+                            ${qStyle.name}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-center no-print">
+                        <button onclick="event.stopPropagation(); selectActor(${actor.id})" class="text-xs font-bold text-ceo-blue hover:text-sky-700 hover:underline">
+                            Ver en gráfica
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function createChartImageDataURL({ format = 'jpeg', backgroundColor = '#E9ECEF' } = {}) {
+            const plot = document.getElementById('mactorPlot');
+            const layer = document.getElementById('mactorLabelLayer');
+            if (!plot || !layer) return '';
+
+            // Asegurar que todas las fuentes personalizadas estén completamente cargadas en el DOM antes de exportar
+            await document.fonts.ready;
+
+            const plotImage = await Plotly.toImage(plot, {
+                format: 'png',
+                width: layer.clientWidth,
+                height: layer.clientHeight,
+                scale: 2
+            });
+            const image = new Image();
+            image.src = plotImage;
+            await image.decode();
+
+            const canvas = document.createElement('canvas');
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+            const context = canvas.getContext('2d');
+            
+            // Renderizado óptimo de texto en Canvas
+            context.textBaseline = 'alphabetic';
+            context.imageSmoothingEnabled = true;
+            context.imageSmoothingQuality = 'high';
+
+            // Background fill con el tono gris corporativo unificado
+            context.fillStyle = backgroundColor;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(image, 0, 0);
+
+            const scaleX = canvas.width / layer.clientWidth;
+            const scaleY = canvas.height / layer.clientHeight;
+            context.save();
+            context.scale(scaleX, scaleY);
+            
+            // Draw connector lines
+            layer.querySelectorAll('.actor-label-connectors path').forEach(line => {
+                if (!line.dataset.points) return;
+                const points = JSON.parse(line.dataset.points);
+                if (!points || !points.length) return;
+                context.strokeStyle = line.getAttribute('stroke') || '#94A3B8';
+                context.lineWidth = parseFloat(line.getAttribute('stroke-width')) || 1.2;
+                context.globalAlpha = parseFloat(line.getAttribute('stroke-opacity')) || 0.85;
+                context.beginPath();
+                points.forEach((pt, idx) => {
+                    if (idx === 0) context.moveTo(pt.x, pt.y);
+                    else context.lineTo(pt.x, pt.y);
+                });
+                context.stroke();
+            });
+
+            // Draw actor & quadrant labels with corporate font
+            layer.querySelectorAll('.actor-label, .quadrant-label').forEach(label => {
+                const left = label.offsetLeft;
+                const top = label.offsetTop;
+                const width = label.getBoundingClientRect().width;
+                const height = label.getBoundingClientRect().height;
+                const labelStyle = getComputedStyle(label);
+                context.globalAlpha = 1;
+                context.fillStyle = labelStyle.backgroundColor;
+                context.strokeStyle = labelStyle.borderColor;
+                context.lineWidth = 1;
+
+                context.beginPath();
+                context.roundRect(left, top, width, height, 8);
+                context.fill();
+                context.stroke();
+
+                if (label.classList.contains('actor-label')) {
+                    context.fillStyle = labelStyle.borderLeftColor || labelStyle.borderColor;
+                    context.beginPath();
+                    context.roundRect(left, top, 4, height, [8, 0, 0, 8]);
+                    context.fill();
+                }
+
+                const padding = parseFloat(labelStyle.paddingLeft) || 10;
+                const fontSize = parseFloat(labelStyle.fontSize) || 11;
+                const lineHeight = fontSize * 1.35;
+                let textY = top + (parseFloat(labelStyle.paddingTop) || 4) + fontSize * 0.85;
+                const names = label.querySelectorAll('.actor-label-name');
+
+                if (!names.length) {
+                    const titleText = label.querySelector('.font-extrabold')?.textContent || label.textContent;
+                    const descText = label.querySelector('.text-\\[10px\\]')?.textContent;
+
+                    if (descText) {
+                        context.font = `bold 11px "Plus Jakarta Sans", sans-serif`;
+                        context.fillStyle = labelStyle.color;
+                        context.fillText(titleText, left + padding, textY);
+                        textY += 13;
+                        context.font = `500 10px "Plus Jakarta Sans", sans-serif`;
+                        context.fillText(descText, left + padding, textY);
+                    } else {
+                        context.font = `${labelStyle.fontWeight} ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+                        context.fillStyle = labelStyle.color;
+                        context.fillText(label.textContent, left + padding, textY);
+                    }
+                } else {
+                    let textX = left + padding;
+                    names.forEach((name, index) => {
+                        const style = getComputedStyle(name);
+                        context.font = `${style.fontWeight} ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+                        context.fillStyle = style.color;
+                        const fullActorText = `${name.textContent}${index < names.length - 1 ? ', ' : ''}`;
+                        const actorWidth = context.measureText(fullActorText).width;
+
+                        if (textX > left + padding && textX + actorWidth > left + width - padding) {
+                            textX = left + padding;
+                            textY += lineHeight;
+                        }
+                        context.fillText(fullActorText, textX, textY);
+                        textX += actorWidth;
+                    });
+                }
+            });
+
+            context.restore();
+            return canvas.toDataURL(`image/${format}`, format === 'jpeg' ? 0.95 : undefined);
+        }
+
+        async function downloadChartImage() {
+            try {
+                showNotification('Exportando JPG...', 'Generando imagen corporativa HD de la gráfica', 'info');
+                const imageData = await createChartImageDataURL({
+                    format: 'jpeg',
+                    backgroundColor: '#FFFFFF'
+                });
+                const link = document.createElement('a');
+                link.download = 'Matriz_Influencia_Dependencia_CEO_HD.jpg';
+                link.href = imageData;
+                link.click();
+                showNotification('Descarga Exitosa', 'Imagen exportada correctamente.', 'success');
+            } catch (error) {
+                console.error('No fue posible exportar la gráfica:', error);
+                showNotification('Error de Exportación', 'No se pudo generar la imagen JPG de la gráfica.', 'alert');
+            }
+        }
+
+        function closeActorDetailCard() {
+            document.getElementById('actorDetailCard').classList.add('hidden');
+            selectedActorId = null;
+            renderPlotlyChart();
+            renderSideLegend();
+            document.querySelectorAll('#actorsTableBody tr').forEach(r => r.classList.remove('bg-sky-50/80', 'font-bold'));
+        }
+
+        function filterQuadrant(qKey) {
+            activeQuadrantFilter = qKey;
+
+            ['all', 'Q1', 'Q2', 'Q3', 'Q4'].forEach(k => {
+                const legBtn = document.getElementById(`legendFilter-${k}`);
+                if (legBtn) {
+                    if (k === qKey) {
+                        legBtn.className = "py-1.5 rounded-md bg-ceo-navy text-white font-bold shadow-sm transition-all";
+                    } else {
+                        legBtn.className = "py-1.5 rounded-md text-slate-600 hover:bg-white hover:text-slate-800 transition-all font-medium";
+                    }
+                }
+            });
+
+            renderPlotlyChart();
+            renderSideLegend();
+            renderTableData();
+        }
+
+        function highlightTableRow(actorId) {
+            document.querySelectorAll('#actorsTableBody tr').forEach(r => r.classList.remove('bg-sky-50/80', 'font-bold'));
+
+            const row = document.getElementById(`row-actor-${actorId}`);
+            if (row) {
+                row.classList.add('bg-sky-50/80', 'font-bold');
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function highlightActorOnChartAndTable() {
+            const query = document.getElementById('chartSearchInput').value.toLowerCase().trim();
+            if (!query) {
+                closeActorDetailCard();
+                return;
+            }
+
+            const match = currentActorsData.find(a => 
+                a.name.toLowerCase().includes(query)
+            );
+
+            if (match) {
+                selectActor(match.id);
+            }
+        }
+
+        function sortTable(key) {
+            if (key === 'initial') {
+                currentActorsData.sort((a, b) => a.id - b.id);
+            } else {
+                currentActorsData.sort((a, b) => b[key] - a[key]);
+            }
+            renderPlotlyChart();
+            renderSideLegend();
+            renderTableData();
+        }
+
+        function processMactorWorkbook(workbook) {
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonSheet = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });
+
+            let actorHeaderRowIdx = -1;
+            for (let r = 0; r < Math.min(jsonSheet.length, 6); r++) {
+                const row = jsonSheet[r];
+                if (row && row.filter(cell => typeof cell === 'string' && cell.trim() !== '').length >= 3) {
+                    actorHeaderRowIdx = r;
+                    break;
+                }
+            }
+
+            if (actorHeaderRowIdx === -1) actorHeaderRowIdx = 0;
+            const headerRow = jsonSheet[actorHeaderRowIdx];
+            
+            let colActors = [];
+            for (let c = 0; c < headerRow.length; c++) {
+                const val = headerRow[c];
+                if (val && typeof val === 'string') {
+                    const cleanVal = val.trim();
+                    if (cleanVal !== '' && !['II', 'DI', 'TOTAL', 'SUMA', 'TOTALES'].includes(cleanVal.toUpperCase())) {
+                        colActors.push({ index: c, name: cleanVal });
+                    }
+                }
+            }
+
+            let rowActors = [];
+            for (let r = actorHeaderRowIdx + 1; r < jsonSheet.length; r++) {
+                const row = jsonSheet[r];
+                if (!row) continue;
+
+                let actorName = null;
+                for (let c = 0; c < 3; c++) {
+                    if (row[c] && typeof row[c] === 'string') {
+                        const candidate = row[c].trim();
+                        if (!['DI', 'II', 'TOTAL', 'SUMA', 'TOTALES'].includes(candidate.toUpperCase())) {
+                            actorName = candidate;
+                            break;
+                        }
+                    }
+                }
+
+                if (actorName) {
+                    rowActors.push({ rowIndex: r, name: actorName, rowData: row });
+                }
+            }
+
+            const actorColumnByName = new Map(
+                colActors.map(column => [column.name.toLocaleLowerCase(), column])
+            );
+            const missingColumns = rowActors
+                .filter(actor => !actorColumnByName.has(actor.name.toLocaleLowerCase()))
+                .map(actor => actor.name);
+            if (missingColumns.length) {
+                throw new Error(`Faltan columnas de dependencia para: ${missingColumns.join(', ')}.`);
+            }
+
+            let extractedData = [];
+            rowActors.forEach((rActor, idx) => {
+                const matchingColumn = actorColumnByName.get(rActor.name.toLocaleLowerCase());
+                let influenceSum = 0;
+                colActors.forEach(cActor => {
+                    if (matchingColumn && cActor.index === matchingColumn.index) return;
+                    const val = rActor.rowData[cActor.index];
+                    const numVal = parseFloat(val);
+                    if (!isNaN(numVal)) {
+                        influenceSum += numVal;
+                    }
+                });
+
+                let dependenceSum = 0;
+
+                if (matchingColumn) {
+                    rowActors.forEach(rOther => {
+                        if (rOther.rowIndex === rActor.rowIndex) return;
+                        const val = rOther.rowData[matchingColumn.index];
+                        const numVal = parseFloat(val);
+                        if (!isNaN(numVal)) {
+                            dependenceSum += numVal;
+                        }
+                    });
+                }
+
+                extractedData.push({
+                    id: idx + 1,
+                    name: rActor.name,
+                    dependence: dependenceSum,
+                    influence: influenceSum
+                });
+            });
+
+            return extractedData;
+        }
+
+        function showNotification(title, message, type = 'info') {
+            const toast = document.getElementById('notificationToast');
+            const iconEl = document.getElementById('notificationIcon');
+            
+            document.getElementById('notificationTitle').textContent = title;
+            document.getElementById('notificationMessage').textContent = message;
+
+            if (type === 'success') {
+                iconEl.className = "p-2 bg-emerald-500/20 text-emerald-400 rounded-lg shrink-0";
+                iconEl.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4"></i>';
+            } else if (type === 'alert') {
+                iconEl.className = "p-2 bg-amber-500/20 text-amber-400 rounded-lg shrink-0";
+                iconEl.innerHTML = '<i data-lucide="alert-triangle" class="w-4 h-4"></i>';
+            } else {
+                iconEl.className = "p-2 bg-ceo-blue/20 text-sky-400 rounded-lg shrink-0";
+                iconEl.innerHTML = '<i data-lucide="info" class="w-4 h-4"></i>';
+            }
+
+            if (window.lucide) lucide.createIcons();
+            toast.classList.remove('hidden');
+
+            setTimeout(() => {
+                closeNotification();
+            }, 5000);
+        }
+
+        function closeNotification() {
+            document.getElementById('notificationToast').classList.add('hidden');
+        }
+
+        function formatReportScore(value) {
+            return Number(value).toLocaleString('es-CO', { maximumFractionDigits: 2 });
+        }
+
+        function buildExecutiveReport(chartImage) {
+            const report = document.getElementById('executiveReport');
+            const thresholds = getQuadrantThresholds();
+            const quadrantOrder = ['Q1', 'Q2', 'Q3', 'Q4'];
+            const actorsByQuadrant = Object.fromEntries(quadrantOrder.map(key => [
+                key,
+                currentActorsData.filter(actor => getActorQuadrant(actor) === key)
+            ]));
+            const totalActors = currentActorsData.length;
+            const highInfluence = currentActorsData.filter(actor =>
+                actor.influence >= thresholds.influence
+            ).length;
+            const highDependence = currentActorsData.filter(actor =>
+                actor.dependence >= thresholds.dependence
+            ).length;
+            const sortedByInfluence = [...currentActorsData].sort((a, b) =>
+                b.influence - a.influence || b.dependence - a.dependence || a.name.localeCompare(b.name, 'es')
+            );
+            const sortedByDependence = [...currentActorsData].sort((a, b) =>
+                b.dependence - a.dependence || b.influence - a.influence || a.name.localeCompare(b.name, 'es')
+            );
+            const styles = {
+                Q1: { title: 'Cuadrante I', label: 'Alta influencia · Baja dependencia', action: 'Alinear como aliados y convocantes; acordar compromisos y responsabilidades concretas.' },
+                Q2: { title: 'Cuadrante II', label: 'Alta influencia · Alta dependencia', action: 'Priorizar concertación y gestión de interdependencias; establecer acuerdos, responsables y seguimiento.' },
+                Q3: { title: 'Cuadrante III', label: 'Baja influencia · Baja dependencia', action: 'Mantener informados y habilitar participación proporcional, monitoreando cambios en su posición.' },
+                Q4: { title: 'Cuadrante IV', label: 'Baja influencia · Alta dependencia', action: 'Asegurar escucha e inclusión; identificar impactos y canales para elevar alertas y necesidades.' }
+            };
+            const actorNames = actors => actors.length
+                ? actors.map(actor => escapeHTML(actor.name)).join(', ')
+                : 'Ninguno identificado';
+            const quadrantSummary = quadrantOrder.map(key => {
+                const actors = actorsByQuadrant[key];
+                const share = totalActors ? Math.round(actors.length / totalActors * 100) : 0;
+                return `<tr>
+                    <td><strong>${styles[key].title}</strong><br><span>${styles[key].label}</span></td>
+                    <td>${actors.length} (${share}%)</td>
+                    <td>${actorNames(actors)}</td>
+                </tr>`;
+            }).join('');
+            const strategicActors = [...actorsByQuadrant.Q1, ...actorsByQuadrant.Q2]
+                .sort((a, b) => b.influence - a.influence || b.dependence - a.dependence);
+            const agenda = ['Q1', 'Q2', 'Q3', 'Q4']
+                .filter(key => actorsByQuadrant[key].length)
+                .map(key => `<li><strong>${styles[key].title} — ${actorNames(actorsByQuadrant[key])}.</strong> ${styles[key].action}</li>`)
+                .join('');
+            const actorRows = [...currentActorsData]
+                .sort((a, b) => quadrantOrder.indexOf(getActorQuadrant(a)) - quadrantOrder.indexOf(getActorQuadrant(b)) ||
+                    b.influence - a.influence || b.dependence - a.dependence ||
+                    a.name.localeCompare(b.name, 'es'))
+                .map(actor => `<tr>
+                    <td>${escapeHTML(actor.name)}</td>
+                    <td>${formatReportScore(actor.dependence)}</td>
+                    <td>${formatReportScore(actor.influence)}</td>
+                    <td>${styles[getActorQuadrant(actor)].title}</td>
+                </tr>`).join('');
+            const corridorName = selectedCorridor ||
+                document.getElementById('activeCorridorBadge').textContent.replace(/^Corredor:\s*/, '') ||
+                'Matriz de grupos de interés';
+            const generatedDate = new Intl.DateTimeFormat('es-CO', {
+                dateStyle: 'long',
+                timeZone: 'America/Bogota'
+            }).format(new Date());
+            const leadingInfluence = sortedByInfluence.slice(0, 3)
+                .map(actor => `${escapeHTML(actor.name)} (${formatReportScore(actor.influence)})`).join(' · ');
+            const leadingDependence = sortedByDependence.slice(0, 3)
+                .map(actor => `${escapeHTML(actor.name)} (${formatReportScore(actor.dependence)})`).join(' · ');
+            const executiveConclusion = actorsByQuadrant.Q2.length
+                ? `La prioridad de gestión es convertir la interdependencia de ${actorsByQuadrant.Q2.length} actor(es) del Cuadrante II en acuerdos operativos verificables, con responsables y seguimiento. Complementariamente, activar a los ${actorsByQuadrant.Q1.length} actor(es) del Cuadrante I como aliados de convocatoria y alineación.`
+                : actorsByQuadrant.Q1.length
+                    ? `La matriz concentra la influencia en ${actorsByQuadrant.Q1.length} actor(es) del Cuadrante I. La decisión inmediata es alinear con ellos objetivos, patrocinio y compromisos, sin perder escucha de los actores con mayor dependencia.`
+                    : `La posición relativa de los actores no identifica casos en los Cuadrantes I o II. Conviene sostener una agenda de escucha y monitoreo, y validar prioridades con evidencia cualitativa del territorio antes de asignar recursos.`;
+
+            report.innerHTML = `
+                <section class="report-page">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #CBD5E1;padding-bottom:4mm;margin-bottom:5mm">
+                        <div>
+                            <div style="font-size:8pt;font-weight:800;letter-spacing:.12em;color:#0284C7;text-transform:uppercase">Corporación Empresarial del Oriente Antioqueño · CEO</div>
+                            <h1 style="font-size:22pt;line-height:1.1;color:#0B132B;margin:2mm 0">Informe ejecutivo de actores</h1>
+                            <div style="font-size:11pt;font-weight:700;color:#334155">${escapeHTML(corridorName)}</div>
+                        </div>
+                        <div style="text-align:right;color:#64748B;font-size:8pt">Análisis MACTOR · ${generatedDate}<br>Base: ${totalActors} actores</div>
+                    </div>
+                    <div style="padding:3mm 4mm;background:#F1F5F9;border-left:1.2mm solid #0284C7;margin-bottom:4mm">
+                        <div style="font-size:8pt;font-weight:800;letter-spacing:.08em;color:#0369A1;text-transform:uppercase;margin-bottom:1mm">Lectura para decisión</div>
+                        <div style="font-size:10pt;line-height:1.45;color:#1E293B">${executiveConclusion}</div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin-bottom:4mm">
+                        <div style="border:1px solid #E2E8F0;border-radius:2mm;padding:3mm"><div style="font-size:7pt;color:#64748B;text-transform:uppercase">Actores analizados</div><strong style="font-size:16pt;color:#0B132B">${totalActors}</strong></div>
+                        <div style="border:1px solid #E2E8F0;border-radius:2mm;padding:3mm"><div style="font-size:7pt;color:#64748B;text-transform:uppercase">Alta influencia</div><strong style="font-size:16pt;color:#B45309">${highInfluence}</strong><span style="font-size:8pt;color:#64748B"> / ${totalActors}</span></div>
+                        <div style="border:1px solid #E2E8F0;border-radius:2mm;padding:3mm"><div style="font-size:7pt;color:#64748B;text-transform:uppercase">Alta dependencia</div><strong style="font-size:16pt;color:#047857">${highDependence}</strong><span style="font-size:8pt;color:#64748B"> / ${totalActors}</span></div>
+                        <div style="border:1px solid #E2E8F0;border-radius:2mm;padding:3mm"><div style="font-size:7pt;color:#64748B;text-transform:uppercase">Umbrales relativos D / I</div><strong style="font-size:13pt;color:#0B132B">${formatReportScore(thresholds.dependence)} / ${formatReportScore(thresholds.influence)}</strong></div>
+                    </div>
+                    <div class="report-overview-grid">
+                        <div class="report-section">
+                            <h2 style="font-size:11pt;color:#0B132B;margin:0 0 2mm">Mapa de influencia y dependencia</h2>
+                            <img class="report-chart" src="${chartImage}" alt="Gráfica de priorización con puntos, etiquetas y cuadrantes">
+                            <div style="font-size:7pt;color:#64748B;margin-top:1.5mm">Las líneas divisorias corresponden a la mitad de los máximos observados en esta matriz. Coordenadas: dependencia (X) e influencia (Y).</div>
+                        </div>
+                        <div class="report-section">
+                            <h2 style="font-size:11pt;color:#0B132B;margin:0 0 2mm">Hallazgos y agenda de gestión</h2>
+                            <div style="font-size:8pt;line-height:1.4;color:#334155;margin-bottom:3mm"><strong>Mayor influencia:</strong> ${leadingInfluence || 'Sin datos'}<br><strong>Mayor dependencia:</strong> ${leadingDependence || 'Sin datos'}<br><strong>Actores en cuadrantes de alta influencia:</strong> ${actorNames(strategicActors)}</div>
+                            <ol style="padding-left:5mm;margin:0;font-size:8pt;line-height:1.42;color:#334155">${agenda}</ol>
+                        </div>
+                    </div>
+                    <div style="font-size:7pt;line-height:1.35;color:#64748B;margin-top:3mm">
+                        Interpretación posicional para priorizar la conversación estratégica; no sustituye la validación cualitativa, la evaluación de intereses ni el análisis de riesgos del territorio.
+                    </div>
+                </section>
+                <section class="report-page">
+                    <h1 style="font-size:18pt;color:#0B132B;margin:0 0 1mm">Implicaciones y prioridades de gestión</h1>
+                    <div style="font-size:9pt;color:#64748B;margin-bottom:4mm">Lectura para orientar la gobernanza del corredor; validar responsables y plazos con el equipo directivo.</div>
+                    <h2 style="font-size:11pt;color:#0B132B;margin:0 0 2mm">Distribución de actores</h2>
+                    <table class="report-table">
+                        <thead><tr><th>Lectura estratégica</th><th>Actores</th><th>Composición</th></tr></thead>
+                        <tbody>${quadrantSummary}</tbody>
+                    </table>
+                    <h2 style="font-size:11pt;color:#0B132B;margin:6mm 0 2mm">Agenda ejecutiva sugerida</h2>
+                    <ol style="padding-left:6mm;margin:0;font-size:9pt;line-height:1.55;color:#334155">${agenda}</ol>
+                    <div style="margin-top:7mm;padding:4mm;border:1px solid #CBD5E1;border-left:1.2mm solid #0284C7;background:#F8FAFC">
+                        <strong style="font-size:9pt;color:#0B132B">Criterio de priorización:</strong>
+                        <span style="font-size:8pt;color:#334155"> influencia y dependencia se leen en relación con los máximos de esta matriz; el plano orienta la conversación, pero no reemplaza la valoración de intereses, riesgos ni contexto territorial.</span>
+                    </div>
+                </section>
+                <section class="report-page report-appendix">
+                    <h1 style="font-size:18pt;color:#0B132B;margin:0 0 1mm">Anexo · Base de priorización</h1>
+                    <div style="font-size:9pt;color:#64748B;margin-bottom:4mm">${escapeHTML(corridorName)} · ${totalActors} actores · Umbrales de cuadrante: dependencia ${formatReportScore(thresholds.dependence)}, influencia ${formatReportScore(thresholds.influence)}.</div>
+                    <table class="report-table">
+                        <thead><tr><th>Actor / organización</th><th>Dependencia (X)</th><th>Influencia (Y)</th><th>Cuadrante</th></tr></thead>
+                        <tbody>${actorRows}</tbody>
+                    </table>
+                </section>`;
+        }
+
+        async function exportDataReport() {
+            if (!currentActorsData.length) {
+                showNotification('Informe no disponible', 'Selecciona un corredor o carga una matriz antes de generar el informe ejecutivo.', 'alert');
+                return;
+            }
+            try {
+                await document.fonts.ready;
+                await new Promise(resolve => requestAnimationFrame(() =>
+                    requestAnimationFrame(resolve)
+                ));
+                const chartImage = await createChartImageDataURL();
+                buildExecutiveReport(chartImage);
+                await Promise.all(Array.from(
+                    document.querySelectorAll('#executiveReport img'),
+                    image => image.decode()
+                ));
+                await new Promise(resolve => requestAnimationFrame(() =>
+                    requestAnimationFrame(resolve)
+                ));
+                window.print();
+            } catch (error) {
+                console.error('No fue posible generar el informe ejecutivo:', error);
+                showNotification('Error de Exportación', 'No se pudo preparar la gráfica o el informe ejecutivo para imprimir.', 'alert');
+            }
+        }
+    </script>
+</body>
+</html>
