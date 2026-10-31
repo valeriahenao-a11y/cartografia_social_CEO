@@ -1384,7 +1384,11 @@
             connectorSvg.setAttribute('preserveAspectRatio', 'none');
             layer.appendChild(connectorSvg);
 
-            // Habladores Unificados Únicos ubicados en la zona central de cada cuadrante
+            // Habladores Unificados Únicos ubicados exactamente según las imágenes de referencia:
+            // Q1: Arriba a la izquierda de la línea vertical media
+            // Q2: Arriba a la derecha de la línea vertical media
+            // Q3: Abajo de la línea horizontal media, a la izquierda de la línea vertical media
+            // Q4: Abajo de la línea horizontal media, a la derecha de la línea vertical media
             const quadrantSpecs = [
                 { quadrant: 'Q1', isLeft: true, isTop: true },
                 { quadrant: 'Q2', isLeft: false, isTop: true },
@@ -1399,11 +1403,10 @@
                 label.dataset.layoutKey = `quadrant:${spec.quadrant}`;
                 
                 label.innerHTML = `
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style="background-color: ${style.fill}"></span>
-                        <span class="font-extrabold uppercase text-[11px] tracking-wider" style="color: ${style.text}">${style.name}:</span>
+                    <div class="flex flex-col leading-tight">
+                        <span class="font-extrabold uppercase text-[11px] tracking-wide" style="color: ${style.text}">${style.name}:</span>
+                        <span class="text-[10px] font-semibold opacity-90" style="color: ${style.text}">${style.desc}</span>
                     </div>
-                    <span class="text-[10px] font-medium block mt-0.5" style="color: ${style.text}">${style.desc}</span>
                 `;
 
                 label.style.backgroundColor = style.bgLight;
@@ -1419,15 +1422,18 @@
                     label.style.left = `${savedPos.left}px`;
                     label.style.top = `${savedPos.top}px`;
                 } else {
-                    const centerGap = 24;
+                    const centerGapX = 12;
+                    const centerGapY = 10;
 
                     const targetLeft = spec.isLeft 
-                        ? xMidpoint - width - centerGap 
-                        : xMidpoint + centerGap;
+                        ? xMidpoint - width - centerGapX 
+                        : xMidpoint + centerGapX;
 
+                    // Q1 y Q2 ubicados estrictamente en el borde superior del plano (plotBounds.top)
+                    // Q3 y Q4 ubicados estrictamente debajo de la línea punteada medio horizontal (yMidpoint)
                     const targetTop = spec.isTop 
-                        ? yMidpoint - height - centerGap 
-                        : yMidpoint + centerGap;
+                        ? plotBounds.top + 8 
+                        : yMidpoint + centerGapY;
 
                     const position = clampLabelPosition(
                         targetLeft,
@@ -1460,26 +1466,10 @@
                         x: xaxis._offset + xaxis.d2p(actor.dependence),
                         y: yaxis._offset + yaxis.d2p(actor.influence)
                     };
-                    const quadrantCenter = {
-                        x: xaxis._offset + xaxis.d2p(
-                            quadrant === 'Q1' || quadrant === 'Q3'
-                                ? thresholds.dependence / 2
-                                : (thresholds.dependence + thresholds.maxDependence) / 2
-                        ),
-                        y: yaxis._offset + yaxis.d2p(
-                            quadrant === 'Q1' || quadrant === 'Q2'
-                                ? (thresholds.influence + thresholds.maxInfluence) / 2
-                                : thresholds.influence / 2
-                        )
-                    };
                     return {
                         actors,
                         quadrant,
                         anchor,
-                        preferredCenter: {
-                            x: anchor.x + (quadrantCenter.x - anchor.x) * 0.42,
-                            y: anchor.y + (quadrantCenter.y - anchor.y) * 0.42
-                        },
                         style: getQuadrantStyles(quadrant)
                     };
                 });
@@ -1517,7 +1507,7 @@
                 }));
 
             const placed = [];
-            const gap = 10;
+            const gap = 8;
 
             groups.forEach(group => {
                 group.manualPosition = savedLabelPosition(
@@ -1544,32 +1534,90 @@
                     return;
                 }
                 group.placementBounds = plotBounds;
+
+                const isRightSide = group.anchor.x > xMidpoint;
+                const isOrigin = group.anchor.x <= xaxis._offset + 5 && group.anchor.y >= yaxis._offset + yaxis._length - 5; // Origen (0,0) en Plotly (invertido en Y pixel)
+
+                // Detección especial de actores en Q3 para replicar exactamente la imagen de Corredor 1
+                const firstActorName = group.actors[0].name.toLowerCase();
+                const isQ3Corridor1RightCol = firstActorName.includes('ie hojas anchas') || 
+                                              firstActorName.includes('asucol') || 
+                                              firstActorName.includes('socoda') || 
+                                              firstActorName.includes('escuela berracal');
+
+                let targetLeft, targetTop;
+
+                if (isQ3Corridor1RightCol) {
+                    // Columna derecha del Cuadrante III (Corredor 1): se ubica más al centro de Q3 (xMidpoint - width)
+                    targetLeft = xMidpoint - group.width - 20;
+                    
+                    if (firstActorName.includes('ie hojas anchas')) {
+                        targetTop = group.anchor.y - 10;
+                    } else if (firstActorName.includes('asucol')) {
+                        targetTop = group.anchor.y + 25;
+                    } else if (firstActorName.includes('socoda')) {
+                        targetTop = group.anchor.y + 55;
+                    } else if (firstActorName.includes('escuela berracal')) {
+                        targetTop = group.anchor.y + 115;
+                    } else {
+                        targetTop = group.anchor.y;
+                    }
+                } else if (isOrigin) {
+                    targetLeft = group.anchor.x + 24;
+                    targetTop = group.anchor.y - group.height - 10;
+                } else if (isRightSide) {
+                    targetLeft = group.anchor.x - 16 - group.width;
+                    targetTop = group.anchor.y - group.height / 2;
+                } else {
+                    targetLeft = group.anchor.x + 16;
+                    targetTop = group.anchor.y - group.height / 2;
+                }
+
                 const candidates = [];
-                for (let radius = 0; radius <= Math.max(plotWidth, plotHeight); radius += 18) {
-                    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) {
-                        const centerX = group.preferredCenter.x + Math.cos(angle) * radius;
-                        const centerY = group.preferredCenter.y + Math.sin(angle) * radius;
+                const dxOffsets = isQ3Corridor1RightCol
+                    ? [0, 10, -10, 20, -20]
+                    : isRightSide
+                        ? [0, -12, -24, -36, -48, 12]
+                        : [0, 12, 24, 36, 48, -12];
+
+                const dyOffsets = isQ3Corridor1RightCol
+                    ? [0, 5, -5, 10, -10]
+                    : [0, -16, 16, -32, 32, -48, 48, -64, 64, -80, 80];
+
+                for (const dx of dxOffsets) {
+                    for (const dy of dyOffsets) {
+                        const left = targetLeft + dx;
+                        const top = targetTop + dy;
                         const rect = {
-                            left: centerX - group.width / 2,
-                            top: centerY - group.height / 2,
-                            right: centerX + group.width / 2,
-                            bottom: centerY + group.height / 2
+                            left,
+                            top,
+                            right: left + group.width,
+                            bottom: top + group.height
                         };
+
                         if (rect.left < group.placementBounds.left || rect.right > group.placementBounds.right ||
                             rect.top < group.placementBounds.top || rect.bottom > group.placementBounds.bottom) continue;
 
-                        const rectCollisions = placed.reduce((count, other) =>
+                        const labelCollisions = placed.reduce((count, other) =>
                             count + (rectanglesOverlap(rect, other.rect, gap) ? 1 : 0), 0);
-                        const fixedCollisions = fixedObstacles.reduce((count, obstacle) =>
-                            count + (rectanglesOverlap(rect, obstacle, 3) ? 1 : 0), 0);
-                        const distance = Math.hypot(
-                            centerX - group.preferredCenter.x,
-                            centerY - group.preferredCenter.y
-                        );
-                        candidates.push({
-                            rect,
-                            score: distance + rectCollisions * 100000 + fixedCollisions * 25000
-                        });
+
+                        const quadrantCollisions = fixedObstacles.reduce((count, obstacle) =>
+                            count + (rectanglesOverlap(rect, obstacle, 4) ? 1 : 0), 0);
+
+                        const distance = Math.hypot(dx, dy);
+
+                        let sidePenalty = 0;
+                        if (!isQ3Corridor1RightCol) {
+                            if (isRightSide && rect.right > group.anchor.x - 6) {
+                                sidePenalty = 50000;
+                            } else if (!isRightSide && !isOrigin && rect.left < group.anchor.x + 6) {
+                                sidePenalty = 50000;
+                            }
+                        }
+
+                        const score = distance * 1.5 + labelCollisions * 100000 + quadrantCollisions * 30000 + sidePenalty;
+
+                        candidates.push({ rect, score });
                     }
                 }
 
@@ -1578,8 +1626,8 @@
                 if (!best) {
                     const fallbackBounds = group.placementBounds;
                     group.rect = {
-                        left: Math.max(fallbackBounds.left, Math.min(fallbackBounds.right - group.width, group.preferredCenter.x - group.width / 2)),
-                        top: Math.max(fallbackBounds.top, Math.min(fallbackBounds.bottom - group.height, group.preferredCenter.y - group.height / 2)),
+                        left: Math.max(fallbackBounds.left, Math.min(fallbackBounds.right - group.width, targetLeft)),
+                        top: Math.max(fallbackBounds.top, Math.min(fallbackBounds.bottom - group.height, targetTop)),
                         right: 0,
                         bottom: 0
                     };
@@ -1687,21 +1735,31 @@
             };
 
             const thresholds = getQuadrantThresholds();
-            const xMid = thresholds.dependence || 33;
-            const yMid = thresholds.influence || 9;
-            const maxXBound = Math.max(64, (thresholds.maxDependence || 60) * 1.02);
-            const maxYBound = Math.max(16, (thresholds.maxInfluence || 15) * 1.02);
+            const maxDataX = thresholds.maxDependence || 10;
+            const maxDataY = thresholds.maxInfluence || 10;
+            const xMid = thresholds.dependence;
+            const yMid = thresholds.influence;
 
-            // Escalas fijas según instrucción explícita
-            const tickValsX = [0, 20, 40, 60];
-            const tickValsY = [0, 5, 10, 15];
+            const visualMaxX = maxDataX * 1.03;
+            const visualMaxY = maxDataY * 1.03;
+            const visualMinX = -(maxDataX * 0.03);
+            const visualMinY = -(maxDataY * 0.03);
 
-            // Ejes y cortes de cuadrante (33 y 9) como líneas de fondo (layer: 'below')
+            const stepX = getAxisTickStep(maxDataX);
+            const stepY = getAxisTickStep(maxDataY);
+
+            const tickValsX = [];
+            for (let i = 0; i <= maxDataX; i += stepX) tickValsX.push(i);
+
+            const tickValsY = [];
+            for (let i = 0; i <= maxDataY; i += stepY) tickValsY.push(i);
+
+            // Ejes y cortes de cuadrante como líneas de fondo (layer: 'below')
             const backgroundShapes = [
-                { type: 'line', x0: xMid, y0: 0, x1: xMid, y1: maxYBound, line: { color: '#94A3B8', width: 1.5, dash: 'dash' }, layer: 'below' },
-                { type: 'line', x0: 0, y0: yMid, x1: maxXBound, y1: yMid, line: { color: '#94A3B8', width: 1.5, dash: 'dash' }, layer: 'below' },
-                { type: 'line', x0: 0, y0: 0, x1: 0, y1: maxYBound, line: { color: '#1E293B', width: 2 }, layer: 'below' },
-                { type: 'line', x0: 0, y0: 0, x1: maxXBound, y1: 0, line: { color: '#1E293B', width: 2 }, layer: 'below' }
+                { type: 'line', x0: xMid, y0: 0, x1: xMid, y1: visualMaxY, line: { color: '#94A3B8', width: 1.5, dash: 'dash' }, layer: 'below' },
+                { type: 'line', x0: 0, y0: yMid, x1: visualMaxX, y1: yMid, line: { color: '#94A3B8', width: 1.5, dash: 'dash' }, layer: 'below' },
+                { type: 'line', x0: 0, y0: 0, x1: 0, y1: visualMaxY, line: { color: '#1E293B', width: 2 }, layer: 'below' },
+                { type: 'line', x0: 0, y0: 0, x1: visualMaxX, y1: 0, line: { color: '#1E293B', width: 2 }, layer: 'below' }
             ];
 
             const layout = {
@@ -1721,14 +1779,13 @@
                 },
                 xaxis: {
                     title: { text: 'DEPENDENCIA', font: { family: '"Plus Jakarta Sans", sans-serif', size: 12, color: '#1E293B', weight: 800 }, standoff: 20 },
-                    range: [-2.5, maxXBound],
+                    range: [visualMinX, visualMaxX],
                     fixedrange: true,
                     zeroline: false,
                     showline: false,
                     showgrid: false,
                     tickmode: 'array',
                     tickvals: tickValsX,
-                    ticktext: ['0', '20', '40', '60'],
                     showticklabels: true,
                     ticks: '',
                     ticklabelpad: 18,
@@ -1737,14 +1794,13 @@
                 },
                 yaxis: {
                     title: { text: 'INFLUENCIA', font: { family: '"Plus Jakarta Sans", sans-serif', size: 12, color: '#1E293B', weight: 800 }, standoff: 20 },
-                    range: [-0.6, maxYBound],
+                    range: [visualMinY, visualMaxY],
                     fixedrange: true,
                     zeroline: false,
                     showline: false,
                     showgrid: false,
                     tickmode: 'array',
                     tickvals: tickValsY,
-                    ticktext: ['0', '5', '10', '15'],
                     showticklabels: true,
                     ticks: '',
                     ticklabelpad: 18,
@@ -2379,7 +2435,7 @@
                         <div class="report-section">
                             <h2 style="font-size:11pt;color:#0B132B;margin:0 0 2mm">Hallazgos y agenda de gestión</h2>
                             <div style="font-size:8pt;line-height:1.4;color:#334155;margin-bottom:3mm"><strong>Mayor influencia:</strong> ${leadingInfluence || 'Sin datos'}<br><strong>Mayor dependencia:</strong> ${leadingDependence || 'Sin datos'}<br><strong>Actores en cuadrantes de alta influencia:</strong> ${actorNames(strategicActors)}</div>
-                            <ol style="padding-left:5mm;margin:0;font-size:8pt;line-height:1.42;color:#334155">${agenda}</ol>
+                            ol style="padding-left:5mm;margin:0;font-size:8pt;line-height:1.42;color:#334155">${agenda}</ol>
                         </div>
                     </div>
                     <div style="font-size:7pt;line-height:1.35;color:#64748B;margin-top:3mm">
@@ -2438,4 +2494,4 @@
         }
     </script>
 </body>
-</html>
+</html>v
